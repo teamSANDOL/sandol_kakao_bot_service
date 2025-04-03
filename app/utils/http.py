@@ -1,8 +1,10 @@
 """이 모듈은 HTTP 비동기 클라이언트를 생성하는 유틸리티 함수를 제공합니다."""
 
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator, Optional, Annotated
+
+from fastapi import Depends, Header
 from httpx import AsyncClient, Request
-from fastapi import Header
+from kakao_chatbot import Payload
 
 class XUserIDClient(AsyncClient):
     """XUserIDClient 클래스는 비동기 HTTP 클라이언트로, 요청 헤더에 사용자 ID를 포함하여 전송합니다.
@@ -42,4 +44,19 @@ async def get_async_client(
         XUserIDClient: 사용자 ID를 포함할 수 있는 비동기 HTTP 클라이언트
     """
     async with XUserIDClient(user_id=x_user_id) as client:
+        yield client
+
+async def get_client_by_payload(
+    payload: Annotated[Payload, Depends(parse_payload)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Payload에서 사용자 ID를 추출하여 비동기 HTTP 클라이언트를 생성합니다.
+
+    Args:
+        payload (Payload): 요청 페이로드
+
+    Returns:
+        XUserIDClient: 사용자 ID를 포함한 비동기 HTTP 클라이언트
+    """
+    async with XUserIDClient(user_id=payload.user_request.user.id) as client:
         yield client

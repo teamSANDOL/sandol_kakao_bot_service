@@ -1,8 +1,7 @@
 """이 모듈은 사용자 정보를 저장하는 User 클래스를 정의합니다."""
 
-from typing import List, TYPE_CHECKING
 
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import Integer, Boolean, String
 
 from app.database import Base

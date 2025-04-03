@@ -6,7 +6,6 @@
 
 import os
 import logging
-import json
 from dotenv import load_dotenv
 from pytz import timezone
 
@@ -49,8 +48,12 @@ class Config:
     """
     debug = os.getenv("DEBUG", "False").lower() == "true"
 
+    SERVICE_ID: str = os.getenv("SERVICE_ID", "4")
+
     USER_SERVICE_URL = os.getenv("USER_SERVICE_URL", "http://user-service:8000")
+    MEAL_SERVICE_URL = os.getenv("MEAL_SERVICE_URL", "http://meal-service:8000")
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./kakao_bot_service.db")
+
     TIMEZONE = os.getenv("TIMEZONE", "Asia/Seoul")
     TZ = timezone(TIMEZONE)
 

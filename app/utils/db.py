@@ -1,6 +1,5 @@
 """이 모듈은 데이터베이스 세션과 사용자 인증 및 권한 확인을 위한 유틸리티 함수를 제공합니다."""
 
-from datetime import datetime
 from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException
@@ -8,11 +7,13 @@ from httpx import AsyncClient
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from kakao_chatbot import Payload
 
-from app.config import Config, logger
-from app.database import AsyncSessionLocal
+from app.config import Config
+from app.database import AsyncSessionLocal, 
 from app.models.user import User  # User 모델이 models 디렉토리에 있다고 가정
 from app.utils.http import get_async_client
+from app.utils.kakao import parse_payload
 
 
 async def get_db():
@@ -26,32 +27,74 @@ async def get_db():
 
 
 async def get_or_create_user(
-    user_id: int,
+    kakao_id: str,
     db: AsyncSession,
-    client: AsyncClient,
+    plusfriend_user_key: str | None = None,
+    app_user_id: str | None = None,
 ) -> User:
-    """DB에서 사용자 조회, 없으면 외부에서 받아와 생성"""
+    """사용자를 ID 우선순위에 따라 검색하고 없으면 새로 생성합니다.
 
+    우선순위: 1. plusfriend_user_key → 2. app_user_id → 3. kakao_id
+    """
+
+    user = None
+
+    # 1. plusfriend_user_key 우선 검색
+    if plusfriend_user_key:
+        result = await db.execute(
+            select(User).where(User.plusfriend_user_key == plusfriend_user_key)
+        )
+        user = result.scalar_one_or_none()
+
+    # 2. app_user_id 검색
+    if not user and app_user_id:
+        result = await db.execute(
+            select(User).where(User.app_user_id == app_user_id)
+        )
+        user = result.scalar_one_or_none()
+
+    # 3. kakao_id 검색
+    if not user:
+        result = await db.execute(select(User).where(User.kakao_id == kakao_id))
+        user = result.scalar_one_or_none()
+
+    # 없으면 새로 생성
+    if not user:
+        user = User(
+            kakao_id=kakao_id,
+            plusfriend_user_key=plusfriend_user_key,
+            app_user_id=app_user_id,
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+
+    return user
 
 
 async def get_current_user(
-    db: Annotated[AsyncSession, Depends(get_db)],
-    client: Annotated[AsyncClient, Depends(get_async_client)],
-    x_user_id: int = Header(None),
+    payload: Payload = Depends(parse_payload),
+    db: AsyncSession = Depends(get_db),
 ) -> User:
-    """X-User-ID 헤더를 가져와 비동기 방식으로 User 객체를 반환합니다.
+    """Payload로부터 kakao_id를 추출 → DB 조회 → 사용자 객체 반환
 
     Args:
-        x_user_id (int): 요청 헤더에서 가져온 사용자 ID
+        payload (Payload): 요청 페이로드
         db (AsyncSession): 비동기 데이터베이스 세션
-        client: AsyncClient: 비동기 HTTP 클라이언트
-
     Returns:
-        User: 데이터베이스에서 조회된 사용자 객체
-
+        User: 사용자 객체
     Raises:
-        HTTPException: X-User-ID 헤더가 없거나 사용자가 존재하지 않는 경우
+        HTTPException: 사용자 정보 조회 실패 시
     """
+    kakao_id = payload.user_request.user.id
+    plusfriend_user_key = payload.user_request.user.properties.plusfriend_user_key
+    app_user_id = payload.user_request.user.properties.app_user_id
+    return await get_or_create_user(
+        kakao_id,
+        db,
+        plusfriend_user_key=plusfriend_user_key,
+        app_user_id=app_user_id,
+    )
 
 async def get_user_info(
     user_id: int,
