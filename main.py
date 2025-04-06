@@ -9,17 +9,13 @@ from kakao_chatbot.response import KakaoResponse
 from kakao_chatbot.response.components import SimpleTextComponent
 import uvicorn
 
-from api_server.settings import logger
-from api_server.meal import meal_api
-from api_server.statics import statics_router
+from app.routers import meal_api
+from app.config import logger
 from app.utils import error_message, parse_payload
 
 
 app = FastAPI(root_path="/api")
 app.include_router(meal_api)
-app.include_router(statics_router)
-
-
 
 
 @app.exception_handler(Exception)
