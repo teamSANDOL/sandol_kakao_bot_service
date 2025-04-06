@@ -2,6 +2,7 @@
 
 비동기 SQLAlchemy를 사용하여 데이터베이스를 연결하고, 테이블을 생성합니다.
 """
+
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import declarative_base

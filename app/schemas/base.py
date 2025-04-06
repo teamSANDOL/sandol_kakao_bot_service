@@ -6,6 +6,7 @@ from pydantic_core import core_schema
 
 from app.config import Config, logger
 
+
 class Timestamp:
     """KST(서울 시간)으로 자동 변환되는 datetime 필드"""
 

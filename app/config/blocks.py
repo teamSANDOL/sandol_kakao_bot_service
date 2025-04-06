@@ -1,10 +1,12 @@
 """응답에 사용되는 상수들을 정의합니다."""
+
 from enum import Enum
 
 from kakao_chatbot.response import QuickReply, ActionEnum
 
 # 도움말 QuickReply
 HELP = QuickReply(label="도움말", message_text="도움말")
+
 
 # 블록 ID 관리
 class BlockID(str, Enum):

@@ -1,6 +1,5 @@
 """이 모듈은 사용자 정보를 저장하는 User 클래스를 정의합니다."""
 
-
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import Integer, Boolean, String
 
@@ -22,7 +21,11 @@ class User(Base):
     __tablename__ = "User"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    kakao_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)  # payload.user_id와 대응
-    plusfriend_user_key: Mapped[str] = mapped_column(String(64), unique=True, nullable=True)
+    kakao_id: Mapped[str] = mapped_column(
+        String(64), unique=True, nullable=False
+    )  # payload.user_id와 대응
+    plusfriend_user_key: Mapped[str] = mapped_column(
+        String(64), unique=True, nullable=True
+    )
     app_user_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=True)
     kakao_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

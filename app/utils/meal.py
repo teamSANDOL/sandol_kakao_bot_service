@@ -55,7 +55,7 @@ def make_meal_card(
 
 
 def make_meal_cards(
-    meals: list[MealResponse]
+    meals: list[MealResponse],
 ) -> tuple[CarouselComponent, CarouselComponent]:
     """주어진 식단 정보를 바탕으로 점심과 저녁 식단을 각각 Carousel로 생성합니다.
 

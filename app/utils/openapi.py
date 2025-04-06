@@ -1,5 +1,6 @@
 from typing import Optional, Dict, List
 
+
 def create_openapi_extra(
     detail_params: Optional[Dict] = None,
     client_extra: Optional[Dict] = None,

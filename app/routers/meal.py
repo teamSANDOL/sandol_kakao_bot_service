@@ -3,6 +3,7 @@
 학식 관련 API가 작성되어 있습니다.
 학식 보기, 등록, 삭제 등의 기능을 담당합니다.
 """
+
 from typing import Annotated
 from datetime import datetime, timedelta
 

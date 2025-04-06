@@ -10,7 +10,7 @@ from sqlalchemy.future import select
 from kakao_chatbot import Payload
 
 from app.config import Config
-from app.database import AsyncSessionLocal, 
+from app.database import AsyncSessionLocal
 from app.models.user import User  # User 모델이 models 디렉토리에 있다고 가정
 from app.utils.http import get_async_client
 from app.utils.kakao import parse_payload
@@ -96,6 +96,7 @@ async def get_current_user(
         app_user_id=app_user_id,
     )
 
+
 async def get_user_info(
     user_id: int,
     client: AsyncClient,
@@ -112,6 +113,7 @@ async def get_user_info(
     Raises:
         HTTPException: 사용자 정보 조회 실패 시
     """
+
 
 async def is_global_admin(user_id: int, client: AsyncClient) -> bool:
     """User API 서버에 요청하여 global_admin 여부 확인"""

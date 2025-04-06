@@ -46,13 +46,16 @@ class Config:
     이 클래스는 환경 변수에서 설정 값을 로드하고, 기본 값을 제공합니다.
     또한, meal_types.json 파일에서 식사 유형을 불러오는 기능도 포함되어 있습니다.
     """
+
     debug = os.getenv("DEBUG", "False").lower() == "true"
 
     SERVICE_ID: str = os.getenv("SERVICE_ID", "4")
 
     USER_SERVICE_URL = os.getenv("USER_SERVICE_URL", "http://user-service:8000")
     MEAL_SERVICE_URL = os.getenv("MEAL_SERVICE_URL", "http://meal-service:8000")
-    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./kakao_bot_service.db")
+    DATABASE_URL = os.getenv(
+        "DATABASE_URL", "sqlite+aiosqlite:///./kakao_bot_service.db"
+    )
 
     TIMEZONE = os.getenv("TIMEZONE", "Asia/Seoul")
     TZ = timezone(TIMEZONE)

@@ -6,6 +6,7 @@ from fastapi import Depends, Header
 from httpx import AsyncClient, Request
 from kakao_chatbot import Payload
 
+
 class XUserIDClient(AsyncClient):
     """XUserIDClient 클래스는 비동기 HTTP 클라이언트로, 요청 헤더에 사용자 ID를 포함하여 전송합니다.
 
@@ -20,6 +21,7 @@ class XUserIDClient(AsyncClient):
         send(request: Request, **kwargs):
             요청 객체에 "X-User-ID" 헤더를 (존재할 경우) 추가한 후, 부모 클래스의 send 메서드를 호출합니다.
     """
+
     def __init__(self, user_id: Optional[int], *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.user_id = user_id
@@ -45,6 +47,7 @@ async def get_async_client(
     """
     async with XUserIDClient(user_id=x_user_id) as client:
         yield client
+
 
 async def get_client_by_payload(
     payload: Annotated[Payload, Depends(parse_payload)],

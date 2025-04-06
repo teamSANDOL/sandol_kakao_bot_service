@@ -2,6 +2,7 @@ from fastapi import Request
 from kakao_chatbot import Payload
 from kakao_chatbot.response import TextCardComponent
 
+
 async def parse_payload(request: Request) -> Payload:
     """Request에서 Payload를 추출합니다.
 
@@ -10,6 +11,7 @@ async def parse_payload(request: Request) -> Payload:
     """
     data_dict = await request.json()
     return Payload.from_dict(data_dict)
+
 
 def error_message(message: str | BaseException) -> TextCardComponent:
     """에러 메시지를 반환합니다.
