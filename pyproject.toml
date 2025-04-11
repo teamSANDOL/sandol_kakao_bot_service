@@ -17,7 +17,7 @@ python-dotenv = "^1.0.1"
 aiosqlite = "^0.21.0"
 alembic = "^1.15.1"
 cachetools = "^5.5.2"
-kakao-chatbot = "^0.3.0"
+kakao-chatbot = "^0.4"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.9"
