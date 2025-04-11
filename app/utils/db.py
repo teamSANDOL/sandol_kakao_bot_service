@@ -48,9 +48,7 @@ async def get_or_create_user(
 
     # 2. app_user_id 검색
     if not user and app_user_id:
-        result = await db.execute(
-            select(User).where(User.app_user_id == app_user_id)
-        )
+        result = await db.execute(select(User).where(User.app_user_id == app_user_id))
         user = result.scalar_one_or_none()
 
     # 3. kakao_id 검색
