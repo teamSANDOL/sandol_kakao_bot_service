@@ -173,19 +173,19 @@ def time_range_to_string(  # noqa: D417
     return ""
 
 
-def extract_menu(contexts, menu_name, restaurant_name) -> list[str]:
+def extract_menu(contexts, meal_type_name, restaurant_name) -> list[str]:
     """컨텍스트에서 메뉴 리스트를 추출합니다.
 
     Args:
         contexts (list[Context]): 컨텍스트 리스트입니다.
-        menu_name (str): 추출할 메뉴의 이름입니다.
+        meal_type_name (str): 식사 종류 이름입니다.
         restaurant_name (str): 식당 이름입니다.
 
     Returns:
         list: 추출된 메뉴 리스트입니다.
     """
     context: Optional[Context] = next(
-        (ctx for ctx in contexts if ctx.name == menu_name), None
+        (ctx for ctx in contexts if ctx.name == meal_type_name), None
     )
     if (
         context
@@ -195,6 +195,46 @@ def extract_menu(contexts, menu_name, restaurant_name) -> list[str]:
     ):
         return json.loads(context.params["menu_list"].value)
     return []
+
+
+def save_menu(
+    contexts: list[Context],
+    meal_type_name: str,
+    restaurant_name: str,
+    menu_list: list,
+    lifspan: int = 5,
+    ttl: int = 300,
+) -> list[Context]:
+    """메뉴를 저장하는 함수입니다.
+
+    Args:
+        contexts (list[Context]): 컨텍스트 리스트입니다.
+        meal_type_name (str): 식사 종류 이름입니다.
+        restaurant_name (str): 식당 이름입니다.
+        menu_list (list): 저장할 메뉴 리스트입니다.
+
+    Returns:
+        list[Context]: 저장된 메뉴 리스트입니다.
+    """
+    context: Optional[Context] = next(
+        (ctx for ctx in contexts if ctx.name == meal_type_name), None
+    )
+    if context:
+        # 기존 메뉴가 있는 경우 삭제
+        contexts.remove(context)
+        menu_str = json.dumps(menu_list, ensure_ascii=False)
+        # 새로운 메뉴를 저장
+        new_context = Context(
+            name=meal_type_name,
+            params={
+                "menu_list": ContextParam(menu_str, menu_str),
+                "restaurant_name": ContextParam(restaurant_name, restaurant_name),
+            },
+            lifespan=lifspan,
+            ttl=ttl,
+        )
+        contexts.append(new_context)
+    return contexts
 
 
 # 식당 유형을 문자열로 변환하기 위한 딕셔너리 (전역 변수로 정의)
@@ -232,6 +272,24 @@ def meal_response_maker(
     response = KakaoResponse() + SimpleTextComponent("식단 미리보기") + lunch + dinner
     for quick_reply in get_cafeteria_register_quick_replies():
         response.add_quick_reply(quick_reply)
+    return response
+
+
+def meal_error_response_maker(message: str) -> KakaoResponse:
+    """식단 정보 에러 메시지를 반환하는 응답을 생성합니다.
+
+    Args:
+        message (str): 에러 메시지
+
+    Returns:
+        KakaoResponse: 에러 메시지 응답
+    """
+    response = KakaoResponse()
+    simple = SimpleTextComponent(message)
+    response.add_component(simple)
+    for quick_reply in get_cafeteria_register_quick_replies():
+        response.add_quick_reply(quick_reply)
+
     return response
 
 

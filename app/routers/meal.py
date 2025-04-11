@@ -15,11 +15,12 @@ from fastapi.responses import JSONResponse
 from httpx import HTTPStatusError
 from kakao_chatbot import Payload
 from kakao_chatbot.context import Context
-from kakao_chatbot.response import KakaoResponse
+from kakao_chatbot.response import KakaoResponse, QuickReply, ActionEnum
 from kakao_chatbot.response.components import SimpleTextComponent, ItemCardComponent
 from kakao_chatbot.response.components import ImageTitle
 
 from app.config import Config, logger
+from app.config.blocks import BlockID
 from app.schemas.meals import (
     MealCard,
     MealResponse,
@@ -41,7 +42,9 @@ from app.utils.meal import (
     establishment_type_to_string,
     extract_menu,
     make_meal_cards,
+    meal_error_response_maker,
     meal_response_maker,
+    save_menu,
     select_restaurant,
     split_string,
     time_range_to_string,
@@ -271,6 +274,93 @@ async def meal_restaurant(
 
 
 @meal_api.post(
+    "/register/delete/{meal_type}",
+    openapi_extra=create_openapi_extra(
+        client_extra={
+            "restaurant_name": "산돌식당",
+        },
+    ),
+)
+async def meal_delete(
+    meal_type: str,
+    payload: Annotated[Payload, Depends(parse_payload)],
+    user: Annotated[User, Depends(get_current_user)],
+    restaurant: Annotated[
+        RestaurantResponse,
+        Depends(select_restaurant),
+    ],
+) -> JSONResponse:
+    """삭제할 메뉴를 선택하는 API입니다.
+
+    meal_type에 해당하는 식사 종류의 메뉴를 삭제할 수 있도록
+    각 메뉴를 퀵리플라이로 반환합니다.
+    퀵리플라이를 통해 삭제할 메뉴를 선택하면 meal_menu_delete API로 이동합니다.
+    삭제할 메뉴가 없을 경우 "삭제할 메뉴가 없습니다."를 반환합니다.
+
+    Args:
+        meal_type (str): 중식 또는 석식을 나타내는 문자열입니다.
+            lunch, dinner 2가지 중 하나의 문자열이어야 합니다.
+        payload (Payload): 카카오 챗봇에서 전달된 Payload 객체입니다.
+        user (User): 현재 사용자 객체입니다.
+        restaurant (RestaurantResponse): 등록된 식당 정보입니다.
+
+    ## 카카오 챗봇 연결 정보
+    ---
+    - 동작 방식: 버튼 연결
+
+    - OpenBuilder:
+        - 블럭:
+            - "메뉴 삭제 - 중식"
+            - "메뉴 삭제 - 석식"
+        - 스킬:
+            - "중식 삭제"
+            - "석식 삭제"
+    ---
+
+    Returns:
+        str: 삭제할 수 있는 메뉴 리스트를 반환합니다.
+    """
+    logger.info(
+        "메뉴 삭제 요청 수신: user_id=%s, meal_type=%s", payload.user_id, meal_type
+    )
+
+    # meal_type에 해당하는 메뉴 리스트를 불러와 퀵리플라이로 반환
+    memu_list = extract_menu(payload.contexts, f"{meal_type}_name", restaurant.name)
+    if not memu_list:
+        logger.warning(
+            "삭제할 메뉴가 없음: user_id=%s, meal_type=%s", payload.user_id, meal_type
+        )
+        return JSONResponse(
+            KakaoResponse()
+            .add_component(SimpleTextComponent("삭제할 메뉴가 없습니다."))
+            .get_dict()
+        )
+    response = KakaoResponse()
+    simple_text = SimpleTextComponent("삭제할 메뉴를 선택해주세요.")
+    response = response.add_component(simple_text)
+    logger.debug(
+        "삭제 가능한 메뉴 리스트 생성: user_id=%s, meal_type=%s, menu_list=%s",
+        payload.user_id,
+        meal_type,
+        memu_list,
+    )
+    for menu in memu_list:
+        quick_reply = QuickReply(
+            label=menu,
+            action=ActionEnum.BLOCK,
+            block_id=BlockID.DELETE_MENU,
+            extra={"meal_type": meal_type, "menu": menu},
+        )
+        response += quick_reply
+    logger.info(
+        "메뉴 삭제 리스트 반환 완료: user_id=%s, meal_type=%s",
+        payload.user_id,
+        meal_type,
+    )
+    return JSONResponse(response.get_dict())
+
+
+@meal_api.post(
     "/register/{meal_type}",
     openapi_extra=create_openapi_extra(
         detail_params={
@@ -359,6 +449,37 @@ async def meal_register(
         menu_list,
     )
     contexts: List[Context] = deepcopy(payload.contexts)
+    if meal_type == "lunch":
+        contexts = save_menu(
+            contexts,
+            "lunch_menu",
+            restaurant.name,
+            menu_list,
+        )
+    elif meal_type == "dinner":
+        contexts = save_menu(
+            contexts,
+            "dinner_menu",
+            restaurant.name,
+            menu_list,
+        )
+    else:
+        logger.error(
+            "식단 등록 실패: user_id=%s, meal_type=%s, menu_list=%s",
+            payload.user_id,
+            meal_type,
+            menu_list,
+        )
+        return JSONResponse(
+            meal_error_response_maker("식사 종류를 확인해주세요.").get_dict()
+        )
+    logger.debug(
+        "식단 등록 완료: user_id=%s, meal_type=%s, menu_list=%s",
+        payload.user_id,
+        meal_type,
+        menu_list,
+    )
+    # 등록된 식단 정보를 다시 불러와 카드를 생성
     lunch_menu = extract_menu(contexts, "lunch_menu", restaurant.name)
     dinner_menu = extract_menu(contexts, "dinner_menu", restaurant.name)
 
@@ -380,7 +501,192 @@ async def meal_register(
     return JSONResponse(response.get_dict())
 
 
-@meal_api.post("/submit", openapi_extra=create_openapi_extra())
+@meal_api.post(
+    "/register/delete_all",
+    openapi_extra=create_openapi_extra(
+        utterance="식단 전체 삭제",
+        client_extra={
+            "restaurant_name": "산돌식당",
+        },
+    ),
+)
+async def meal_delete_all(
+    meal_type: str,
+    payload: Annotated[Payload, Depends(parse_payload)],
+    user: Annotated[User, Depends(get_current_user)],
+    restaurant: Annotated[
+        RestaurantResponse,
+        Depends(select_restaurant),
+    ],
+) -> JSONResponse:
+    """모든 메뉴를 삭제하는 API입니다.
+
+    모든 메뉴를 삭제하고 삭제된 결과를 응답으로 반환합니다.
+
+    ## 카카오 챗봇 연결 정보
+    ---
+    - 동작방식: 버튼 연결
+
+    - OpenBuilder:
+        - 블럭: "식단 삭제"
+        - 스킬: "식단 삭제"
+    ---
+
+    Returns:
+        str: 모든 메뉴가 삭제되었음을 반환합니다.
+    """
+    logger.info("모든 메뉴 삭제 요청 수신: user_id=%s", payload.user_id)
+
+    logger.debug("모든 메뉴 삭제: user_id=%s", payload.user_id)
+    contexts: List[Context] = deepcopy(payload.contexts)
+    contexts = save_menu(
+        contexts,
+        "lunch_menu",
+        restaurant.name,
+        [],
+        lifspan=0,
+        ttl=0,
+    )
+    contexts = save_menu(
+        contexts,
+        "dinner_menu",
+        restaurant.name,
+        [],
+        lifspan=0,
+        ttl=0,
+    )
+    response = KakaoResponse().add_component(
+        SimpleTextComponent("모든 메뉴가 삭제되었습니다.")
+    )
+    response.contexts = contexts
+    logger.info("모든 메뉴 삭제 완료: user_id=%s", payload.user_id)
+    return JSONResponse(response.get_dict())
+
+
+@meal_api.post(
+    "/register/delete_menu",
+    openapi_extra=create_openapi_extra(
+        client_extra={
+            "meal_type": "lunch",
+            "menu": "김치찌개",
+            "restaurant_name": "산돌식당",
+        },
+    ),
+)
+async def meal_menu_delete(
+    meal_type: str,
+    payload: Annotated[Payload, Depends(parse_payload)],
+    user: Annotated[User, Depends(get_current_user)],
+    restaurant: Annotated[
+        RestaurantResponse,
+        Depends(select_restaurant),
+    ],
+) -> JSONResponse:
+    """선택한 메뉴를 삭제하는 API입니다.
+
+    meal_delete API에서 선택한 메뉴를 삭제합니다.
+    삭제된 결과를 응답으로 반환합니다.
+
+    ## 카카오 챗봇 연결 정보
+    ---
+    - 동작방식: 버튼 연결
+
+    - OpenBuilder:
+        - 블럭: "메뉴 삭제"
+        - 스킬: "메뉴 삭제"
+
+    - Params:
+        - client_extra:
+            - meal_type(str): 삭제할 식사 종류
+            - menu(str): 삭제할 메뉴
+    ---
+
+    Returns:
+        str: 메뉴가 삭제된 결과를 반환합니다.
+    """
+    logger.info("메뉴 삭제 요청 수신: user_id=%s", payload.user_id)
+
+    meal_type = payload.action.client_extra.get("meal_type", "")
+    menu = payload.action.client_extra.get("menu", "")
+    if not meal_type or not menu:
+        logger.error(
+            "메뉴 삭제 실패: user_id=%s, meal_type=None, menu=None",
+            payload.user_id,
+        )
+        return JSONResponse(
+            meal_error_response_maker("삭제할 메뉴를 입력해주세요.").get_dict()
+        )
+
+    contexts: List[Context] = deepcopy(payload.contexts)
+    menu_list = extract_menu(contexts, f"{meal_type}_name", restaurant.name)
+    logger.debug(
+        "메뉴 삭제 시도: user_id=%s, meal_type=%s, menu=%s, menu_list=%s",
+        payload.user_id,
+        meal_type,
+        menu,
+        menu_list,
+    )
+    if menu not in menu_list:
+        logger.error(
+            "메뉴 삭제 실패(등록되지 않음): user_id=%s, meal_type=%s, menu=%s, menu_list=%s",
+            payload.user_id,
+            meal_type,
+            menu,
+            menu_list,
+        )
+        return JSONResponse(
+            meal_error_response_maker("등록되지 않은 메뉴입니다.").get_dict()
+        )
+
+    menu_list.remove(menu)
+    contexts = save_menu(
+        contexts,
+        f"{meal_type}_name",
+        restaurant.name,
+        menu_list,
+    )
+    logger.debug(
+        "메뉴 삭제 완료: user_id=%s, meal_type=%s, menu=%s",
+        payload.user_id,
+        meal_type,
+        menu_list,
+    )
+
+    lunch_menu = extract_menu(contexts, "lunch_menu", restaurant.name)
+    dinner_menu = extract_menu(contexts, "dinner_menu", restaurant.name)
+
+    lunch_card = MealCard(
+        menu=lunch_menu,
+        meal_type=MealType.lunch,
+        restaurant_name=restaurant.name,
+    )
+    dinner_card = MealCard(
+        menu=dinner_menu,
+        meal_type=MealType.dinner,
+        restaurant_name=restaurant.name,
+    )
+    lunch, dinner = make_meal_cards(lunch_card, dinner_card)
+
+    response = meal_response_maker(lunch, dinner)
+    response.contexts = contexts
+
+    logger.info(
+        "메뉴 삭제 완료: user_id=%s, meal_type=%s, menu=%s",
+        payload.user_id,
+        meal_type,
+        menu,
+    )
+    return JSONResponse(response.get_dict())
+
+
+@meal_api.post(
+    "/submit",
+    openapi_extra=create_openapi_extra(
+        client_extra={
+            "restaurant_name": "산돌식당",
+        },
+    ),
+)
 async def meal_submit(
     payload: Annotated[Payload, Depends(parse_payload)],
     client: Annotated[XUserIDClient, Depends(get_xuser_client_by_payload)],
@@ -463,10 +769,26 @@ async def meal_submit(
     response.add_component(submit_message)
     response.add_component(lunch_carousel)
     response.add_component(dinner_carousel)
-
+    contexts = save_menu(
+        contexts,
+        "lunch_menu",
+        restaurant.name,
+        [],
+        lifspan=0,
+        ttl=0,
+    )
+    contexts = save_menu(
+        contexts,
+        "dinner_menu",
+        restaurant.name,
+        [],
+        lifspan=0,
+        ttl=0,
+    )
+    response.contexts = contexts
     logger.info(
         "식단 확정 완료: user_id=%s, restaurant_name=%s",
         payload.user_id,
-        lunch.restaurant_name,
+        restaurant.name,
     )
     return JSONResponse(response.get_dict())
