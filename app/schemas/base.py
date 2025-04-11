@@ -1,7 +1,6 @@
-from typing import Generic, TypeVar
 from datetime import datetime, timezone
 
-from pydantic import BaseModel, GetCoreSchemaHandler
+from pydantic import GetCoreSchemaHandler
 from pydantic_core import core_schema
 
 from app.config import Config, logger
