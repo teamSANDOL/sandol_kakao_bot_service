@@ -3,8 +3,12 @@
 from typing import AsyncGenerator, Optional, Annotated
 
 from fastapi import Depends, Header
+from sqlalchemy.ext.asyncio import AsyncSession
 from httpx import AsyncClient, Request
 from kakao_chatbot import Payload
+
+from app.utils.db import get_current_user, get_db
+from app.utils.kakao import parse_payload
 
 
 class XUserIDClient(AsyncClient):
@@ -51,7 +55,7 @@ async def get_async_client(
 
 async def get_client_by_payload(
     payload: Annotated[Payload, Depends(parse_payload)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[AsyncSession, Depends(get_current_user)],
 ):
     """Payload에서 사용자 ID를 추출하여 비동기 HTTP 클라이언트를 생성합니다.
 
@@ -61,5 +65,5 @@ async def get_client_by_payload(
     Returns:
         XUserIDClient: 사용자 ID를 포함한 비동기 HTTP 클라이언트
     """
-    async with XUserIDClient(user_id=payload.user_request.user.id) as client:
+    async with XUserIDClient(user_id=user) as client:
         yield client
