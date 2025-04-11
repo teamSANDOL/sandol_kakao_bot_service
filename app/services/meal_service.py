@@ -41,6 +41,10 @@ async def fetch_restaurants(
 
     Args:
         client (XUserIDClient): HTTP 클라이언트 인스턴스
+        restaurant_id (int, optional): 식당 ID. 기본값은 None.
+            None인 경우 모든 식당 정보를 가져옵니다.
+            특정 식당의 정보를 가져오려면 해당 식당 ID를 제공해야 합니다.
+            식당 ID가 제공되면 해당 식당의 정보만 가져옵니다.
 
     Returns:
         List[RestaurantResponse]: 식당 정보 리스트
