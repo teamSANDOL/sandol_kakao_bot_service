@@ -1,6 +1,8 @@
 """응답에 사용되는 상수들을 정의합니다."""
 
+from copy import deepcopy
 from enum import Enum
+from typing import Optional
 
 from kakao_chatbot.response import QuickReply, ActionEnum
 
@@ -19,6 +21,30 @@ class BlockID(str, Enum):
     APPROVE_RESTAURANT = "6731d9b89fb8545410e9d29b"
     DECLINE_RESTAURANT = "674031c1aeded40bd4bd58d9"
     RESTAURANT_INFO = "672183965e0ed128077abfe3"
+    SELECT_RESTAURANT = "67f3d3080e01a1241f2707c7"
+
+
+def get_cafeteria_register_quick_replies(
+    restaurant_name: Optional[str] = None,
+) -> list[QuickReply]:
+    """식당 등록 관련 QuickReply를 반환합니다.
+
+    식당 등록과 관련된 QuickReply를 반환합니다. 각 QuickReply는
+    ActionEnum.BLOCK을 사용하여 블록 ID와 연결됩니다.
+
+    Returns:
+        list[QuickReply]: 식당 등록 관련 QuickReply 리스트
+    """
+    if restaurant_name:
+        qr_list = []
+        for qr in deepcopy(CAFETERIA_REGISTER_QUICK_REPLIES):
+            qr.extra = {
+                "restaurant_name": restaurant_name,
+            }
+            qr_list.append(qr)
+        return qr_list
+    # 식당 이름이 없는 경우, 기본 QuickReply 리스트를 반환합니다.
+    return CAFETERIA_REGISTER_QUICK_REPLIES
 
 
 CAFETERIA_REGISTER_QUICK_REPLIES = [
