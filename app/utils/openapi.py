@@ -8,14 +8,16 @@ def create_openapi_extra(
     utterance: Optional[str] = None,
 ) -> Dict:
     """detail_params, client_extra, contexts를 받아
+
     OpenAPI 스키마에 맞게 변환하며, 각각을 default로 설정한다.
-    예시:
-    >>> detail_params = {
-    ...     "Cafeteria": {
-    ...         "origin": "산돌",
-    ...         "value": "산돌식당"
-    ...     }
-    ... }
+
+    Examples:
+        >>> detail_params = {
+        ...     "Cafeteria": {
+        ...         "origin": "산돌",
+        ...         "value": "산돌식당"
+        ...     }
+        ... }
     """
     if detail_params is None:
         detail_params = {}

@@ -22,7 +22,7 @@ from app.schemas.meals import MealCard, RestaurantResponse, TimeRange
 from app.services.meal_service import fetch_my_restaurants
 from app.utils import get_korean_day
 from app.utils.auth_client import get_xuser_client_by_payload
-from app.utils.db import get_current_user
+from app.utils.user import get_current_user
 from app.utils.http import XUserIDClient, get_client_by_payload
 from app.utils.kakao import parse_payload
 

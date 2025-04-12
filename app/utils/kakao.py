@@ -1,6 +1,6 @@
 from fastapi import Request
 from kakao_chatbot import Payload
-from kakao_chatbot.response import TextCardComponent
+from kakao_chatbot.response.components import TextCardComponent
 
 
 async def parse_payload(request: Request) -> Payload:

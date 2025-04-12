@@ -34,7 +34,7 @@ from app.services.meal_service import (
     post_meal,
 )
 from app.utils.auth_client import get_xuser_client_by_payload
-from app.utils.db import get_current_user
+from app.utils.user import get_current_user
 from app.utils.http import XUserIDClient
 from app.utils import create_openapi_extra
 from app.utils.kakao import parse_payload
