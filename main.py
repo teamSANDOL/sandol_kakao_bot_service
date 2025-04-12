@@ -14,7 +14,7 @@ from app.config import logger
 from app.utils import error_message, parse_payload
 
 
-app = FastAPI(root_path="/api")
+app = FastAPI(root_path="/kakao-bot")
 app.include_router(meal_api)
 
 
