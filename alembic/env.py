@@ -29,6 +29,7 @@ if config.config_file_name is not None:
 from app.database import Base  # Base.metadata 자동 불러오기
 
 target_metadata = Base.metadata
+print(Base.metadata.tables.keys())  # dict_keys(['User'])가 나와야 정상
 
 
 # ✅ 비동기 DB 엔진 생성
@@ -66,3 +67,4 @@ if context.is_offline_mode():
 else:
     print("🚀 Running migrations in ONLINE mode...")
     asyncio.run(run_migrations_online())
+
