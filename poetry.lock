@@ -388,14 +388,14 @@ all = ["flake8 (>=7.1.1)", "mypy (>=1.11.2)", "pytest (>=8.3.2)", "ruff (>=0.6.2
 
 [[package]]
 name = "kakao-chatbot"
-version = "0.4.1"
+version = "0.4.2"
 description = "Effortlessly build KakaoTalk chatbots with Python objects - say goodbye to complex JSON and hello to streamlined development."
 optional = false
 python-versions = "<4.0,>=3.8"
 groups = ["main"]
 files = [
-    {file = "kakao_chatbot-0.4.1-py3-none-any.whl", hash = "sha256:2441af35d6826a905e33f425ffac79800cdb385a1f7703b8e539c05f2168705b"},
-    {file = "kakao_chatbot-0.4.1.tar.gz", hash = "sha256:29c79c463d087a5390cbbf4929c65462cdfc2a6f2b66c82f8b460bed1de58c53"},
+    {file = "kakao_chatbot-0.4.2-py3-none-any.whl", hash = "sha256:32636ab3c1e957e7f0148f77dcff32136dd980f22237c916f8db4762d97bb796"},
+    {file = "kakao_chatbot-0.4.2.tar.gz", hash = "sha256:16993a86a33fbc8f5e9ad86e36f2c89d88e48afa5ccff25775eb3c5ce9df4cfd"},
 ]
 
 [[package]]
