@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from app.config import Config
+from app.config import Config, logger
 from app.schemas.meals import MealType, MealResponse, RestaurantResponse
 from app.utils.http import XUserIDClient
 
@@ -21,15 +21,16 @@ async def fetch_latest_meals(
         List[MealResponse]: 식사 정보 리스트
     """
     if not restaurant_id:
-        response = await client.get(f"{Config.MEAL_SERVICE_URL}/api/meals/latest")
+        response = await client.get(f"{Config.MEAL_SERVICE_URL}/meals/latest")
     else:
         response = await client.get(
-            (f"{Config.MEAL_SERVICE_URL}/meals/restaurants/{{restaurant_id}}latest")
+            (f"{Config.MEAL_SERVICE_URL}/meals/restaurants/{{restaurant_id}}/latest")
         )
     response.raise_for_status()
     list_data = response.json().get("data", [])
 
     # Pydantic 모델을 사용하여 JSON 데이터를 직접 변환
+    logger.debug(f"Fetched meals: {list_data}")
     return [MealResponse.model_validate(item) for item in list_data]
 
 
@@ -50,7 +51,7 @@ async def fetch_restaurants(
         List[RestaurantResponse]: 식당 정보 리스트
     """
     if not restaurant_id:
-        response = await client.get(f"{Config.MEAL_SERVICE_URL}/api/restaurants")
+        response = await client.get(f"{Config.MEAL_SERVICE_URL}/restaurants")
     else:
         response = await client.get(
             (f"{Config.MEAL_SERVICE_URL}/restaurants/{{restaurant_id}}")
@@ -109,7 +110,7 @@ async def post_meal(
         dict: 등록된 식단 정보
     """
     response = await client.post(
-        f"{Config.MEAL_SERVICE_URL}/api/meals/{restaurant_id}",
+        f"{Config.MEAL_SERVICE_URL}/meals/{restaurant_id}",
         json={
             "meal_type": meal_type,
             "menu": menu,

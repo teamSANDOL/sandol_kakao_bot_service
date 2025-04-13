@@ -52,7 +52,7 @@ class Config:
     SERVICE_ID: str = os.getenv("SERVICE_ID", "4")
 
     USER_SERVICE_URL = os.getenv("USER_SERVICE_URL", "http://user-service:8000")
-    MEAL_SERVICE_URL = os.getenv("MEAL_SERVICE_URL", "http://meal-service:8000")
+    MEAL_SERVICE_URL = os.getenv("MEAL_SERVICE_URL", "http://meal-service:80")
     DATABASE_URL = os.getenv(
         "DATABASE_URL", "sqlite+aiosqlite:///./kakao_bot_service.db"
     )
