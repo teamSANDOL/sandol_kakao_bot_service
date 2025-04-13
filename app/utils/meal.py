@@ -24,7 +24,7 @@ from app.utils import get_korean_day
 from app.utils.auth_client import get_xuser_client_by_payload
 from app.utils.user import get_current_user
 from app.utils.http import XUserIDClient
-from app.utils.kakao import parse_payload
+from app.utils.kakao import KakaoError, parse_payload
 
 
 def make_meal_card(meal: MealCard) -> TextCardComponent:
@@ -357,5 +357,5 @@ async def select_restaurant(
             extra={"restaurant_name": restaurant.name},
         )
 
-    response.add_context(text_card)
-    return JSONResponse(response.get_dict())
+    response.add_component(text_card)
+    raise KakaoError(response)

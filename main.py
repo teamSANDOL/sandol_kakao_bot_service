@@ -65,13 +65,14 @@ async def http_exception_handler(request: Request, exc: Exception):
     Returns:
         JSONResponse: 예외에 대한 JSON 응답
     """
+    if isinstance(exc, KakaoError):
+        return JSONResponse(exc.get_response().get_dict())
+
     # 예외 처리 시 로그 남기기
     logger.error(
         "Exception occurred: %s\n%s"
         % (exc, "".join(traceback.format_tb(exc.__traceback__)))
     )
-    if isinstance(exc, KakaoError):
-        return JSONResponse(exc.get_response().get_dict())
     return JSONResponse(KakaoResponse().add_component(error_message(exc)).get_dict())
 
 
