@@ -48,6 +48,10 @@ async def get_or_create_user(
 
     # 없으면 새로 생성
     if not user:
+        if plusfriend_user_key == "":
+            plusfriend_user_key = None
+        if app_user_id == "":
+            app_user_id = None
         user = User(
             kakao_id=kakao_id,
             plusfriend_user_key=plusfriend_user_key,
