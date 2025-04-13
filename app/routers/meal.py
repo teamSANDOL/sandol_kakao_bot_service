@@ -27,7 +27,7 @@ from app.schemas.meals import (
     MealType,
     RestaurantResponse,
 )
-from app.models.user import User
+from app.models.users import User
 from app.services.meal_service import (
     fetch_latest_meals,
     fetch_restaurant_by_name,
@@ -50,10 +50,10 @@ from app.utils.meal import (
     time_range_to_string,
 )
 
-meal_api = APIRouter(prefix="/meal")
+meal_router = APIRouter(prefix="/meal")
 
 
-@meal_api.post(
+@meal_router.post(
     "/view",
     openapi_extra=create_openapi_extra(
         detail_params={
@@ -67,7 +67,6 @@ meal_api = APIRouter(prefix="/meal")
 )
 async def meal_view(
     payload: Annotated[Payload, Depends(parse_payload)],
-    user: Annotated[User, Depends(get_current_user)],
     client: Annotated[XUserIDClient, Depends(get_xuser_client_by_payload)],
 ) -> JSONResponse:
     """식단 정보를 Carousel TextCard 형태로 반환합니다.
@@ -97,7 +96,7 @@ async def meal_view(
     Returns:
         str: 식단 정보를 반환합니다.
     """
-    logger.info("식단 정보 조회 요청 수신: user_id=%s", payload.user_request.user.id)
+    logger.info("식단 정보 조회 요청 수신: kakao_id=%s", payload.user_request.user.id)
 
     # payload에서 Cafeteria 값 추출
     cafeteria = payload.action.detail_params.get("Cafeteria")  # 학식 이름
@@ -114,7 +113,7 @@ async def meal_view(
         meals = meal_list
 
     # 어제 7시를 기준으로 식당 정보를 필터링
-    logger.debug("식당 정보 정렬 시작: user_id=%s", user.id)
+    logger.debug("식당 정보 정렬 시작")
     standard_time = datetime.now(tz=Config.TZ) - timedelta(days=1)
     standard_time = standard_time.replace(hour=19, minute=0, second=0, microsecond=0)
     af_standard: list[MealResponse] = []
@@ -146,7 +145,7 @@ async def meal_view(
             dinner.append(meal)
         else:
             logger.warning(
-                "식단 정보 오류: user_id=%s, meal_type=%s",
+                "식단 정보 오류: kakao_id=%s, meal_type=%s",
                 payload.user_request.user.id,
                 meal.meal_type,
             )
@@ -163,7 +162,7 @@ async def meal_view(
     if not dinner_carousel.is_empty:
         response.add_component(dinner_carousel)
     if not response.component_list:
-        logger.debug("식단 정보가 없습니다: user_id=%s", payload.user_request.user.id)
+        logger.debug("식단 정보가 없습니다: kakao_id=%s", payload.user_request.user.id)
         response.add_component(SimpleTextComponent("식단 정보가 없습니다."))
 
     # 퀵리플라이 추가
@@ -183,11 +182,11 @@ async def meal_view(
                 message_text=f"학식 {meal.restaurant_name}",
             )
 
-    logger.info("식단 정보 조회 완료: user_id=%s", payload.user_request.user.id)
+    logger.info("식단 정보 조회 완료: kakao_id=%s", payload.user_request.user.id)
     return JSONResponse(response.get_dict())
 
 
-@meal_api.post(
+@meal_router.post(
     "/restaurant",
     openapi_extra=create_openapi_extra(
         client_extra={
@@ -220,14 +219,14 @@ async def meal_restaurant(
     Returns:
         str: 식당 정보를 반환합니다.
     """
-    logger.info("식당 정보 조회 요청 수신: user_id=%s", payload.user_id)
+    logger.info("식당 정보 조회 요청 수신: kakao_id=%s", payload.user_id)
     restaurant_name: str = payload.action.client_extra["restaurant_name"]
 
     # 식당 정보를 가져옵니다.
     result = await fetch_restaurant_by_name(restaurant_name, client)
     if not result:
         logger.error(
-            "식당 정보 조회 실패: user_id=%s, restaurant_name=%s",
+            "식당 정보 조회 실패: kakao_id=%s, restaurant_name=%s",
             payload.user_id,
             restaurant_name,
         )
@@ -265,7 +264,7 @@ async def meal_restaurant(
     response = KakaoResponse().add_component(item_card)
 
     logger.info(
-        "식당 정보 조회 완료: user_id=%s, restaurant_name=%s",
+        "식당 정보 조회 완료: kakao_id=%s, restaurant_name=%s",
         payload.user_id,
         restaurant_name,
     )
@@ -273,7 +272,7 @@ async def meal_restaurant(
     return JSONResponse(response.get_dict())
 
 
-@meal_api.post(
+@meal_router.post(
     "/register/delete/{meal_type}",
     openapi_extra=create_openapi_extra(
         client_extra={
@@ -321,14 +320,14 @@ async def meal_delete(
         str: 삭제할 수 있는 메뉴 리스트를 반환합니다.
     """
     logger.info(
-        "메뉴 삭제 요청 수신: user_id=%s, meal_type=%s", payload.user_id, meal_type
+        "메뉴 삭제 요청 수신: kakao_id=%s, meal_type=%s", payload.user_id, meal_type
     )
 
     # meal_type에 해당하는 메뉴 리스트를 불러와 퀵리플라이로 반환
     memu_list = extract_menu(payload.contexts, f"{meal_type}_name", restaurant.name)
     if not memu_list:
         logger.warning(
-            "삭제할 메뉴가 없음: user_id=%s, meal_type=%s", payload.user_id, meal_type
+            "삭제할 메뉴가 없음: kakao_id=%s, meal_type=%s", payload.user_id, meal_type
         )
         return JSONResponse(
             KakaoResponse()
@@ -339,7 +338,7 @@ async def meal_delete(
     simple_text = SimpleTextComponent("삭제할 메뉴를 선택해주세요.")
     response = response.add_component(simple_text)
     logger.debug(
-        "삭제 가능한 메뉴 리스트 생성: user_id=%s, meal_type=%s, menu_list=%s",
+        "삭제 가능한 메뉴 리스트 생성: kakao_id=%s, meal_type=%s, menu_list=%s",
         payload.user_id,
         meal_type,
         memu_list,
@@ -353,14 +352,14 @@ async def meal_delete(
         )
         response += quick_reply
     logger.info(
-        "메뉴 삭제 리스트 반환 완료: user_id=%s, meal_type=%s",
+        "메뉴 삭제 리스트 반환 완료: kakao_id=%s, meal_type=%s",
         payload.user_id,
         meal_type,
     )
     return JSONResponse(response.get_dict())
 
 
-@meal_api.post(
+@meal_router.post(
     "/register/{meal_type}",
     openapi_extra=create_openapi_extra(
         detail_params={
@@ -501,7 +500,7 @@ async def meal_register(
     return JSONResponse(response.get_dict())
 
 
-@meal_api.post(
+@meal_router.post(
     "/register/delete_all",
     openapi_extra=create_openapi_extra(
         utterance="식단 전체 삭제",
@@ -563,7 +562,7 @@ async def meal_delete_all(
     return JSONResponse(response.get_dict())
 
 
-@meal_api.post(
+@meal_router.post(
     "/register/delete_menu",
     openapi_extra=create_openapi_extra(
         client_extra={
@@ -679,7 +678,7 @@ async def meal_menu_delete(
     return JSONResponse(response.get_dict())
 
 
-@meal_api.post(
+@meal_router.post(
     "/submit",
     openapi_extra=create_openapi_extra(
         client_extra={
