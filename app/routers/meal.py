@@ -175,13 +175,18 @@ async def meal_view(
             message_text="학식",
         )
 
+    inserted_restaurant = set()
     for meal in meal_list:
-        if meal.restaurant_name != target_cafeteria:
+        if (
+            meal.restaurant_name != target_cafeteria
+            and meal.restaurant_name not in inserted_restaurant
+        ):
             response.add_quick_reply(
                 label=meal.restaurant_name,
                 action="message",
                 message_text=f"학식 {meal.restaurant_name}",
             )
+            inserted_restaurant.add(meal.restaurant_name)
 
     logger.info("식단 정보 조회 완료: user_id=%s", payload.user_request.user.id)
     return JSONResponse(response.get_dict())
