@@ -1,3 +1,5 @@
+"""기본 스키마 정의 모듈 입니다."""
+
 from datetime import datetime, timezone
 
 from pydantic import GetCoreSchemaHandler
