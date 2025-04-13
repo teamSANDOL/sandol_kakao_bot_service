@@ -24,7 +24,7 @@ async def fetch_latest_meals(
         response = await client.get(f"{Config.MEAL_SERVICE_URL}/meals/latest")
     else:
         response = await client.get(
-            (f"{Config.MEAL_SERVICE_URL}/meals/restaurants/{{restaurant_id}}/latest")
+            (f"{Config.MEAL_SERVICE_URL}/meals/restaurant/{restaurant_id}/latest")
         )
     response.raise_for_status()
     list_data = response.json().get("data", [])
@@ -82,14 +82,32 @@ async def fetch_my_restaurants(
     user_id: int,
     client: XUserIDClient,
 ) -> List[RestaurantResponse]:
-    """사용자가 관리자 또는 소유자로 등록된 식당들을 조회합니다."""
-    response = await client.get(
-        f"{Config.MEAL_SERVICE_URL}/restaurants/",
-        params={"owner_id": user_id, "manager_id": user_id, "size": 100},
-    )
-    response.raise_for_status()
-    data = response.json().get("data", [])
-    return [RestaurantResponse.model_validate(item) for item in data]
+    """사용자가 관리자 또는 소유자로 등록된 식당들을 조회합니다.
+
+    Args:
+        user_id (int): 사용자 ID
+        client (XUserIDClient): HTTP 클라이언트 인스턴스
+
+    Returns:
+        List[RestaurantResponse]: 사용자가 관련된 식당 정보 리스트
+    """
+    logger.info(f"Fetching restaurants for user_id: {user_id}")
+    params_list = [
+        {"owner_id": user_id, "size": 100},
+        {"manager_id": user_id, "size": 100},
+    ]
+    restaurants = []
+
+    for params in params_list:
+        response = await client.get(
+            f"{Config.MEAL_SERVICE_URL}/restaurants/", params=params
+        )
+        response.raise_for_status()
+        data = response.json().get("data", [])
+        restaurants.extend(data)
+
+    logger.debug(f"Fetched restaurants: {restaurants}")
+    return [RestaurantResponse.model_validate(item) for item in restaurants]
 
 
 async def post_meal(

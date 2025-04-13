@@ -15,7 +15,7 @@ from kakao_chatbot.response.components import (
     SimpleTextComponent,
 )
 
-from app.config import BlockID
+from app.config import BlockID, logger
 from app.config.blocks import get_cafeteria_register_quick_replies
 from app.models.users import User
 from app.schemas.meals import MealCard, RestaurantResponse, TimeRange
@@ -82,11 +82,13 @@ def make_meal_cards(
     """
 
     def create_carousel(
-        meals: MealCard | list[MealCard], meal_type: str
+        meals: MealCard | Sequence[MealCard], meal_type: str
     ) -> CarouselComponent:
         """특정 식사 타입의 CarouselComponent를 생성합니다."""
+        mealtype_dict = {"lunch": "점심", "dinner": "저녁"}
         carousel = CarouselComponent()
-        meals = meals if isinstance(meals, list) else [meals]
+        if isinstance(meals, MealCard):
+            meals = [meals]
 
         for meal in meals:
             if meal:
@@ -95,7 +97,7 @@ def make_meal_cards(
         if carousel.is_empty:
             carousel.add_item(
                 TextCardComponent(
-                    title="식단 정보가 없습니다.",
+                    title=f"{mealtype_dict[meal_type]}",
                     description="식단 정보가 없습니다.",
                 )
             )
@@ -184,9 +186,11 @@ def extract_menu(contexts, meal_type_name, restaurant_name) -> list[str]:
     Returns:
         list: 추출된 메뉴 리스트입니다.
     """
+    logger.debug("메뉴 타입 추출\n식사 종류: %s", meal_type_name)
     context: Optional[Context] = next(
         (ctx for ctx in contexts if ctx.name == meal_type_name), None
     )
+    logger.debug("컨텍스트: %s", context.name if context else "없음")
     if (
         context
         and isinstance(context.params.get("menu_list"), ContextParam)
@@ -194,6 +198,14 @@ def extract_menu(contexts, meal_type_name, restaurant_name) -> list[str]:
         and context.params["restaurant_name"].value == restaurant_name
     ):
         return json.loads(context.params["menu_list"].value)
+    logger.warning(
+        "메뉴 타입 추출 실패\n식사 종류: %s\n식당 이름: %s \n컨텍스트: %s \n컨텍스트 param: %s \n컨텍스트 menu_list: %s",
+        meal_type_name,
+        restaurant_name,
+        context.name if context else "없음",
+        context.params if context and context.params else "없음",
+        context.params.get("menu_list") if context and context.params else "없음",
+    )
     return []
 
 
@@ -204,6 +216,7 @@ def save_menu(
     menu_list: list,
     lifspan: int = 5,
     ttl: int = 300,
+    add_mode: bool = False,
 ) -> list[Context]:
     """메뉴를 저장하는 함수입니다.
 
@@ -212,18 +225,27 @@ def save_menu(
         meal_type_name (str): 식사 종류 이름입니다.
         restaurant_name (str): 식당 이름입니다.
         menu_list (list): 저장할 메뉴 리스트입니다.
+        lifspan (int, optional): 컨텍스트의 생명주기입니다. 기본값은 5입니다.
+        ttl (int, optional): 컨텍스트의 TTL입니다. 기본값은 300입니다.
+        add_mode (bool, optional): 메뉴 추가 모드 여부입니다. 기본값은 False입니다.
+        만약 True인 경우 기존 메뉴에 추가됩니다.
+        False인 경우 기존 메뉴가 삭제되고 새로운 메뉴가 저장됩니다.
 
     Returns:
         list[Context]: 저장된 메뉴 리스트입니다.
     """
+    logger.debug("메뉴 저장\n식사 종류: %s", meal_type_name)
     context: Optional[Context] = next(
         (ctx for ctx in contexts if ctx.name == meal_type_name), None
     )
+    logger.debug("컨텍스트: %s", context.name if context else "없음")
     if context:
         # 기존 메뉴가 있는 경우 삭제
+        if add_mode and isinstance(context.params.get("menu_list"), ContextParam):
+            # 메뉴 추가 모드인 경우 기존 메뉴에 추가
+            menu_list = json.loads(context.params["menu_list"].value) + menu_list
         contexts.remove(context)
         menu_str = json.dumps(menu_list, ensure_ascii=False)
-        # 새로운 메뉴를 저장
         new_context = Context(
             name=meal_type_name,
             params={
@@ -258,18 +280,25 @@ def establishment_type_to_string(establishment_type: str) -> str:
 
 
 def meal_response_maker(
-    lunch: CarouselComponent, dinner: CarouselComponent
+    lunch: CarouselComponent, dinner: CarouselComponent, is_temp: bool = True
 ) -> KakaoResponse:
     """식단 정보 미리보기를 반환하는 응답을 생성합니다.
 
     Args:
         lunch (CarouselComponent): 점심 식단 카드
         dinner (CarouselComponent): 저녁 식단 카드
+        is_temp (bool): 임시 응답 여부
+            True인 경우, "식단 미리보기"라는 제목이 추가됩니다.
+            False인 경우, 제목이 추가되지 않습니다.
 
     Returns:
         KakaoResponse: 식단 정보 미리보기 응답
     """
-    response = KakaoResponse() + SimpleTextComponent("식단 미리보기") + lunch + dinner
+    response = KakaoResponse()
+    if is_temp:
+        response += SimpleTextComponent("식단 미리보기")
+    response += lunch
+    response += dinner
     for quick_reply in get_cafeteria_register_quick_replies():
         response.add_quick_reply(quick_reply)
     return response
@@ -333,6 +362,11 @@ async def select_restaurant(
         RestaurantResponse: 등록된 식단 정보를 반환합니다.
         JSONResponse: 등록된 식단 정보를 반환합니다.
     """
+    logger.info(
+        "식당 선택\n사용자: %s\n식당 리스트: %s",
+        user.kakao_id,
+        [restaurant.name for restaurant in restaurants],
+    )
     restaurant_name: str = payload.action.client_extra.get("restaurant_name", "")
     if restaurant_name:
         # 사용자가 선택한 식당이 있는 경우
