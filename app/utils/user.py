@@ -5,16 +5,18 @@
 """
 
 from typing import Annotated
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Header
 from httpx import AsyncClient
 from kakao_chatbot import Payload
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.config import Config
-from app.models.user import User
+from app.models.users import User
+from app.schemas.users import UserSchema
 from app.utils.db import get_db
-from app.utils.kakao import parse_payload
+from app.utils.http import get_async_client
+from app.utils.kakao import KakaoError, parse_payload
 
 
 async def get_or_create_user(
@@ -89,10 +91,44 @@ async def get_current_user(
     )
 
 
+async def get_current_user_by_header(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    x_user_id: int = Header(None),
+) -> User:
+    """X-User-ID 헤더를 가져와 비동기 방식으로 User 객체를 반환합니다.
+
+    Args:
+        x_user_id (int): 요청 헤더에서 가져온 사용자 ID
+        db (AsyncSession): 비동기 데이터베이스 세션
+
+    Returns:
+        User: 데이터베이스에서 조회된 사용자 객체
+
+    Raises:
+        HTTPException: X-User-ID 헤더가 없거나 사용자가 존재하지 않는 경우
+    """
+    if x_user_id is None:
+        raise HTTPException(
+            status_code=Config.HttpStatus.UNAUTHORIZED,
+            detail="X-User-ID 헤더가 필요합니다.",
+        )
+
+    result = await db.execute(select(User).where(User.id == x_user_id))
+    user = result.scalar_one_or_none()
+
+    if user is None:
+        raise HTTPException(
+            status_code=Config.HttpStatus.NOT_FOUND,
+            detail="사용자를 찾을 수 없습니다.",
+        )
+
+    return user
+
+
 async def get_user_info(
     user_id: int,
     client: AsyncClient,
-):
+) -> UserSchema:
     """사용자 정보를 가져와 UserSchema 객체를 반환합니다.
 
     Args:
@@ -105,6 +141,34 @@ async def get_user_info(
     Raises:
         HTTPException: 사용자 정보 조회 실패 시
     """
+    response = await client.get(f"{Config.USER_SERVICE_URL}user/api/users/{user_id}/")
+    try:
+        response.raise_for_status()
+    except Exception as e:
+        if response.status_code == Config.HttpStatus.NOT_FOUND:
+            raise HTTPException(
+                status_code=Config.HttpStatus.NOT_FOUND,
+                detail="사용자를 찾을 수 없습니다.",
+            ) from e
+        if response.status_code == Config.HttpStatus.UNAUTHORIZED:
+            raise HTTPException(
+                status_code=Config.HttpStatus.UNAUTHORIZED,
+                detail="권한이 없습니다.",
+            ) from e
+        if response.status_code == Config.HttpStatus.FORBIDDEN:
+            raise HTTPException(
+                status_code=Config.HttpStatus.FORBIDDEN,
+                detail="권한이 없습니다.",
+            ) from e
+        if response.status_code == Config.HttpStatus.BAD_REQUEST:
+            raise HTTPException(
+                status_code=Config.HttpStatus.BAD_REQUEST,
+                detail="잘못된 요청입니다.",
+            ) from e
+        raise HTTPException(
+            status_code=Config.HttpStatus.INTERNAL_SERVER_ERROR, detail=str(e)
+        ) from e
+    return UserSchema.model_validate(response.json(), strict=False)
 
 
 async def is_global_admin(user_id: int, client: AsyncClient) -> bool:
@@ -128,12 +192,14 @@ async def is_global_admin(user_id: int, client: AsyncClient) -> bool:
 async def check_admin_user(
     user: User,
     client: AsyncClient,
+    kakao_request: bool = True,
 ) -> bool:
     """사용자가 관리자 권한을 가지고 있는지 확인합니다.
 
     Args:
         user (UserSchema): 사용자 정보가 담긴 스키마 객체
-        client (AsyncClient): 비동기 HTTP
+        client (AsyncClient): 비동기 HTTP 클라이언트
+        kakao_request (bool): 카카오 요청 여부 (기본값: True)
 
     Returns:
         bool: 관리자 권한 여부
@@ -143,29 +209,56 @@ async def check_admin_user(
     """
     if user.kakao_admin or await is_global_admin(user.id, client):
         return True
-    raise HTTPException(
-        status_code=Config.HttpStatus.FORBIDDEN, detail="관리자 권한이 필요합니다."
+    exception = HTTPException(
+        status_code=Config.HttpStatus.FORBIDDEN,
+        detail="관리자 권한이 없습니다.",
     )
+    if kakao_request:
+        raise KakaoError(exception.detail)
+    raise exception
 
 
-# async def get_admin_user(
-#     db: Annotated[AsyncSession, Depends(get_db)],
-#     client: Annotated[AsyncClient, Depends(get_async_client)],
-#     x_user_id: int = Header(None),
-# ) -> User:
-#     """현재 사용자가 관리자 권한을 가지고 있는지 확인하고 UserSchema 객체를 반환합니다.
+async def get_admin_user(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    client: Annotated[AsyncClient, Depends(get_async_client)],
+    payload: Annotated[Payload, Depends(parse_payload)],
+) -> User:
+    """현재 사용자가 관리자 권한을 가지고 있는지 확인하고 UserSchema 객체를 반환합니다.
 
-#     Args:
-#         x_user_id (int): 요청 헤더에서 가져온 사용자 ID
-#         db (AsyncSession): 비동기 데이터베이스 세션
-#         client (AsyncClient): 비동기 HTTP 클라이언트
+    Args:
+        payload (Payload): 요청 페이로드
+        db (AsyncSession): 비동기 데이터베이스 세션
+        client (AsyncClient): 비동기 HTTP 클라이언트
 
-#     Returns:
-#         User: 관리자 권한이 확인된 사용자 DB 객체
+    Returns:
+        User: 관리자 권한이 확인된 사용자 DB 객체
 
-#     Raises:
-#         HTTPException: X-User-ID 헤더가 없거나 사용자가 존재하지 않는 경우
-#     """
-#     user = await get_current_user(db, client, x_user_id)
-#     await check_admin_user(user, client)
-#     return user
+    Raises:
+        HTTPException: 사용자 정보 조회 실패 시
+    """
+    user = await get_current_user(payload, db)
+    await check_admin_user(user, client)
+    return user
+
+
+async def get_admin_user_by_header(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    client: Annotated[AsyncClient, Depends(get_async_client)],
+    x_user_id: int = Header(None),
+) -> User:
+    """현재 사용자가 관리자 권한을 가지고 있는지 확인하고 UserSchema 객체를 반환합니다.
+
+    Args:
+        x_user_id (int): 요청 헤더에서 가져온 사용자 ID
+        db (AsyncSession): 비동기 데이터베이스 세션
+        client (AsyncClient): 비동기 HTTP 클라이언트
+
+    Returns:
+        User: 관리자 권한이 확인된 사용자 DB 객체
+
+    Raises:
+        HTTPException: X-User-ID 헤더가 없거나 사용자가 존재하지 않는 경우
+    """
+    user = await get_current_user_by_header(db, x_user_id)
+    await check_admin_user(user, client)
+    return user

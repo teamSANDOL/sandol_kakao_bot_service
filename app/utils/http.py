@@ -4,11 +4,9 @@ from typing import AsyncGenerator, Optional, Annotated
 
 from fastapi import Depends, Header
 from httpx import AsyncClient, Request
-from kakao_chatbot import Payload
 
-from app.models.user import User
+from app.models.users import User
 from app.utils.user import get_current_user
-from app.utils.kakao import parse_payload
 
 
 class XUserIDClient(AsyncClient):
@@ -54,7 +52,6 @@ async def get_async_client(
 
 
 async def get_client_by_payload(
-    payload: Annotated[Payload, Depends(parse_payload)],
     user: Annotated[User, Depends(get_current_user)],
 ):
     """Payload에서 사용자 ID를 추출하여 비동기 HTTP 클라이언트를 생성합니다.
