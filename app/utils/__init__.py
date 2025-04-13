@@ -1,7 +1,7 @@
 """This module contains utility functions for the application."""
 
 from .db import get_db
-from .http import get_async_client, XUserIDClient
+from .http import XUserIDClient
 from .kakao import parse_payload, error_message
 from .openapi import create_openapi_extra
 

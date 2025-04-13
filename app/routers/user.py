@@ -16,8 +16,7 @@ from app.config.config import Config
 from app.models.users import User
 from app.schemas.users import UserCreate, UserRead
 from app.utils.db import get_db
-from app.utils.http import get_async_client
-from app.utils.user import get_user_info
+from app.utils.user import get_user_info, get_async_client
 
 user_router = APIRouter(prefix="/users", tags=["User"])
 

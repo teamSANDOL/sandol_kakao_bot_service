@@ -17,13 +17,13 @@ from kakao_chatbot.response.components import (
 
 from app.config import BlockID
 from app.config.blocks import get_cafeteria_register_quick_replies
-from app.models.user import User
+from app.models.users import User
 from app.schemas.meals import MealCard, RestaurantResponse, TimeRange
 from app.services.meal_service import fetch_my_restaurants
 from app.utils import get_korean_day
 from app.utils.auth_client import get_xuser_client_by_payload
 from app.utils.user import get_current_user
-from app.utils.http import XUserIDClient, get_client_by_payload
+from app.utils.http import XUserIDClient
 from app.utils.kakao import parse_payload
 
 
@@ -295,7 +295,7 @@ def meal_error_response_maker(message: str) -> KakaoResponse:
 
 async def get_my_restaurants(
     user: Annotated[User, Depends(get_current_user)],
-    client: Annotated[XUserIDClient, Depends(get_client_by_payload)],
+    client: Annotated[XUserIDClient, Depends(get_xuser_client_by_payload)],
 ) -> list[RestaurantResponse]:
     """DI에 의존하는 식당 정보를 가져오는 함수
 

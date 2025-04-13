@@ -1,12 +1,8 @@
 """이 모듈은 HTTP 비동기 클라이언트를 생성하는 유틸리티 함수를 제공합니다."""
 
-from typing import AsyncGenerator, Optional, Annotated
+from typing import Optional
 
-from fastapi import Depends, Header
 from httpx import AsyncClient, Request
-
-from app.models.users import User
-from app.utils.user import get_current_user
 
 
 class XUserIDClient(AsyncClient):
@@ -32,36 +28,3 @@ class XUserIDClient(AsyncClient):
         if self.user_id is not None:
             request.headers["X-User-ID"] = str(self.user_id)
         return await super().send(request, **kwargs)
-
-
-async def get_async_client(
-    x_user_id: Optional[int] = Header(None),
-) -> AsyncGenerator[XUserIDClient, None]:
-    """비동기 HTTP 클라이언트를 생성하고 반환합니다.
-
-    요청 헤더에 X-User-ID가 포함된 경우, 해당 값을 XUserIDClient에 설정하여 반환합니다.
-
-    Args:
-        x_user_id (Optional[int]): 요청 헤더에서 전달된 사용자 ID
-
-    Yields:
-        XUserIDClient: 사용자 ID를 포함할 수 있는 비동기 HTTP 클라이언트
-    """
-    async with XUserIDClient(user_id=x_user_id) as client:
-        yield client
-
-
-async def get_client_by_payload(
-    user: Annotated[User, Depends(get_current_user)],
-):
-    """Payload에서 사용자 ID를 추출하여 비동기 HTTP 클라이언트를 생성합니다.
-
-    Args:
-        payload (Payload): 요청 페이로드
-        user (User): 현재 사용자 객체
-
-    Returns:
-        XUserIDClient: 사용자 ID를 포함한 비동기 HTTP 클라이언트
-    """
-    async with XUserIDClient(user_id=user.id) as client:
-        yield client
