@@ -1,5 +1,6 @@
 """Sandol의 메인 애플리케이션 파일입니다."""
 
+from contextlib import asynccontextmanager
 import traceback
 from typing import Annotated
 
@@ -11,12 +12,40 @@ from kakao_chatbot.response.components import SimpleTextComponent
 import uvicorn
 
 from app.routers import meal_router, user_router
-from app.config import logger
+from app.config import Config, logger
+from app.database import init_db
+from app.utils.lifespan import set_service_account
 from app.utils import error_message, parse_payload
 from app.utils.kakao import KakaoError
 
 
-app = FastAPI(root_path="/kakao-bot")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """FastAPI의 lifespan 이벤트 핸들러"""
+    logger.info("🚀 서비스 시작: 데이터베이스 init 및 서비스 계정 설정")
+    logger.debug(
+        "Cofing 정보 로드 %s",
+        {
+            "dubug": Config.debug,
+            "timezone": Config.TIMEZONE,
+            "database_url": Config.DATABASE_URL,
+            "user_service_url": Config.USER_SERVICE_URL,
+        },
+    )
+
+    # 애플리케이션 시작 시 데이터베이스 테이블 생성
+    await init_db()
+
+    # 서버 시작 시 서비스 계정 설정 실행
+    await set_service_account()
+
+    yield  # FastAPI가 실행 중인 동안 유지됨
+
+    # 애플리케이션 종료 시 로그 출력
+    logger.info("🛑 서비스 종료: 정리 작업 완료")
+
+
+app = FastAPI(lifespan=lifespan, root_path="/kakao-bot")
 app.include_router(meal_router)
 app.include_router(user_router)
 
