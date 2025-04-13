@@ -1,13 +1,14 @@
 from typing import Annotated, AsyncGenerator
+
 from fastapi import Depends
+from kakao_chatbot import Payload
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from kakao_chatbot import Payload
 from app.models.users import User
 from app.utils.db import get_db
-from app.utils.user import get_or_create_user
-from app.utils.kakao import parse_payload
 from app.utils.http import XUserIDClient
+from app.utils.kakao import parse_payload
+from app.utils.user import get_or_create_user
 
 
 async def get_xuser_client_by_payload(

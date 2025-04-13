@@ -19,7 +19,7 @@ class UserRead(BaseModel):
     kakao_admin: bool
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class UserSchema(BaseModel):

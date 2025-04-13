@@ -4,19 +4,36 @@
 사용자 권한을 확인하는 기능도 포함되어 있습니다.
 """
 
-from typing import Annotated
+from typing import Annotated, AsyncGenerator, Optional
 from fastapi import Depends, HTTPException, Header
 from httpx import AsyncClient
 from kakao_chatbot import Payload
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config.config import Config
+from app.config.config import Config, logger
 from app.models.users import User
 from app.schemas.users import UserSchema
 from app.utils.db import get_db
-from app.utils.http import get_async_client
 from app.utils.kakao import KakaoError, parse_payload
+from app.utils.http import XUserIDClient
+
+
+async def get_async_client(
+    x_user_id: Optional[int] = Header(None),
+) -> AsyncGenerator[XUserIDClient, None]:
+    """비동기 HTTP 클라이언트를 생성하고 반환합니다.
+
+    요청 헤더에 X-User-ID가 포함된 경우, 해당 값을 XUserIDClient에 설정하여 반환합니다.
+
+    Args:
+        x_user_id (Optional[int]): 요청 헤더에서 전달된 사용자 ID
+
+    Yields:
+        XUserIDClient: 사용자 ID를 포함할 수 있는 비동기 HTTP 클라이언트
+    """
+    async with XUserIDClient(user_id=x_user_id) as client:
+        yield client
 
 
 async def get_or_create_user(
@@ -145,10 +162,12 @@ async def get_user_info(
     Raises:
         HTTPException: 사용자 정보 조회 실패 시
     """
-    response = await client.get(f"{Config.USER_SERVICE_URL}user/api/users/{user_id}/")
+    response = await client.get(f"{Config.USER_SERVICE_URL}/api/users/{user_id}/")
     try:
         response.raise_for_status()
     except Exception as e:
+        logger.warning(f"User service에서 사용자 정보를 가져오는 중 오류 발생: {e}")
+        logger.warning("반환 값 : %s", response.json())
         if response.status_code == Config.HttpStatus.NOT_FOUND:
             raise HTTPException(
                 status_code=Config.HttpStatus.NOT_FOUND,
@@ -180,7 +199,7 @@ async def is_global_admin(user_id: int, client: AsyncClient) -> bool:
     if Config.debug:
         return user_id == 1
     response = await client.get(
-        f"{Config.USER_SERVICE_URL}user/api/users/{user_id}/is_global_admin/"
+        f"{Config.USER_SERVICE_URL}/api/users/{user_id}/is_global_admin/"
     )
 
     try:
