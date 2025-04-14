@@ -6,7 +6,7 @@
 
 import asyncio
 from copy import deepcopy
-from typing import Annotated, List
+from typing import Annotated, List, Literal
 from datetime import datetime, timedelta
 
 from fastapi import Depends, APIRouter
@@ -558,7 +558,7 @@ async def meal_menu_delete(
     ),
 )
 async def meal_register(
-    meal_type: str,
+    meal_type: Literal["lunch", "dinner"],
     payload: Annotated[Payload, Depends(parse_payload)],
     user: Annotated[User, Depends(get_current_user)],
     restaurant: Annotated[
@@ -575,11 +575,10 @@ async def meal_register(
     사용자가 등록한 식당이 여러개일 경우, 사용자가 선택한 식당을 가져옵니다.
 
     Args:
-        meal_type (str): 중식 또는 석식을 나타내는 문자열입니다.
+        meal_type (Literal): 중식 또는 석식을 나타내는 문자열입니다.
             lunch, dinner 2가지 중 하나의 문자열이어야 합니다.
         payload (Payload): 카카오 챗봇에서 전달된 Payload 객체입니다.
         user (User): 현재 사용자 객체입니다.
-        client (XUserIDClient): XUserIDClient 객체입니다.
         restaurant (RestaurantResponse): 등록된 식당 정보입니다.
 
     Returns:
