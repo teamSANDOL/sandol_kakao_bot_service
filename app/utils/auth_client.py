@@ -5,6 +5,7 @@ from kakao_chatbot import Payload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.users import User
+from app.config import Config
 from app.utils.db import get_db
 from app.utils.http import XUserIDClient
 from app.utils.kakao import parse_payload
@@ -19,4 +20,10 @@ async def get_xuser_client_by_payload(
     kakao_id = payload.user_request.user.id
     user: User = await get_or_create_user(kakao_id, db)
     async with XUserIDClient(user_id=user.id) as client:
+        yield client
+
+
+async def get_service_xuser_client() -> AsyncGenerator[XUserIDClient, None]:
+    """서비스 계정으로 HTTP 클라이언트 반환"""
+    async with XUserIDClient(user_id=int(Config.SERVICE_ID)) as client:
         yield client
