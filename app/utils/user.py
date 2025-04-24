@@ -80,6 +80,19 @@ async def get_or_create_user(
         await db.commit()
         await db.refresh(user)
 
+    # 사용자 정보 자동 수정
+    if (
+        user.kakao_id != kakao_id
+        or user.plusfriend_user_key != plusfriend_user_key
+        or user.app_user_id != app_user_id
+    ):
+        user.kakao_id = kakao_id
+        if plusfriend_user_key:
+            user.plusfriend_user_key = plusfriend_user_key
+        if app_user_id:
+            user.app_user_id = app_user_id
+        await db.commit()
+        await db.refresh(user)
     return user
 
 
