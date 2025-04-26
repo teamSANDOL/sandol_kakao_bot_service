@@ -202,11 +202,11 @@ wheels = [
 
 [[package]]
 name = "kakao-chatbot"
-version = "0.4.1"
+version = "0.4.3"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/bd/ed/9206ec0937c11cda88d8ececcfe020f4a668445692fbc5d34aecd0865de4/kakao_chatbot-0.4.1.tar.gz", hash = "sha256:29c79c463d087a5390cbbf4929c65462cdfc2a6f2b66c82f8b460bed1de58c53", size = 38126 }
+sdist = { url = "https://files.pythonhosted.org/packages/4a/37/4345f23c7b5274e352de903b4f60bd190484665b83f17d2b5b93204fa2da/kakao_chatbot-0.4.3.tar.gz", hash = "sha256:34bc7fcd3fb22a1e1d69191dd7c191113c83941c0bcfa70f0adb13a5a17eacb6", size = 37319 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2f/9e/1151e4eb3817e498abf1d180c9a4a525283a1fbb6b5d69ce9ee1cc80ca39/kakao_chatbot-0.4.1-py3-none-any.whl", hash = "sha256:2441af35d6826a905e33f425ffac79800cdb385a1f7703b8e539c05f2168705b", size = 47607 },
+    { url = "https://files.pythonhosted.org/packages/1b/62/94bcded1bc145089b48dfe6281ffae06ca9bee742bb0aa38e4d4dfb7a4c6/kakao_chatbot-0.4.3-py3-none-any.whl", hash = "sha256:939922d9832756019133cbf83ba38f78ad4d76fb8210ecbc497a6cfa3939a816", size = 47767 },
 ]
 
 [[package]]
@@ -421,7 +421,7 @@ requires-dist = [
     { name = "fastapi", specifier = "~=0.115.6" },
     { name = "fastapi-pagination", specifier = ">=0.12.34,<0.13" },
     { name = "httpx", specifier = ">=0.28,<0.29" },
-    { name = "kakao-chatbot", specifier = ">=0.4,<0.5" },
+    { name = "kakao-chatbot", specifier = ">=0.4.3,<0.5" },
     { name = "python-dotenv", specifier = ">=1.0.1,<2" },
     { name = "pytz", specifier = ">=2025.2" },
     { name = "sqlalchemy", specifier = ">=2,<3" },

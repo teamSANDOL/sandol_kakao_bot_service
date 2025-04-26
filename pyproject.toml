@@ -15,7 +15,7 @@ dependencies = [
     "aiosqlite>=0.21.0,<0.22",
     "alembic>=1.15.1,<2",
     "cachetools>=5.5.2,<6",
-    "kakao-chatbot>=0.4,<0.5",
+    "kakao-chatbot>=0.4.3,<0.5",
     "pytz>=2025.2",
 ]
 
