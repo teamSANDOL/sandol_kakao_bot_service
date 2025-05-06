@@ -12,9 +12,13 @@ async def get_notice_list(
 ) -> List[Notice]:
     """공지사항 목록을 가져옵니다."""
     url = f"{Config.NOTICE_SERVICE_URL}/notice"
-
-    response = await client.get(url)
-
-    response.raise_for_status()
+    params = {
+        "page": page,
+        "size": page_size,
+    }
+    response = await client.get(url, params=params)
+    if response.status_code != Config.HttpStatus.OK:
+        # 기타 에러 처리
+        raise Exception(f"Error: {response.status_code} - {response.text}")
 
     return NoticeResponse(**response.json()).items
