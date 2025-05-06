@@ -3,7 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
-class Notice:
+class Notice(BaseModel):
     """공지사항 모델
 
     Attributes:
