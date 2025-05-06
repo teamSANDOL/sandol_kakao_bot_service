@@ -3,12 +3,13 @@ from kakao_chatbot.response.components import ListCardComponent, ListItem, Link,
 
 from app.schemas.notice import Notice
 
+
 def notice_to_list_item(notice: Notice) -> ListItem:
     """공지사항을 리스트 아이템으로 변환합니다."""
     description = f"{notice.author} | {notice.create_at}"
     return ListItem(
         title=notice.title,
-        description=notice.description,
+        description=description,
         link=Link(
             web=notice.url,
         ),
