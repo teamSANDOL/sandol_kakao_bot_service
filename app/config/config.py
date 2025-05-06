@@ -56,6 +56,9 @@ class Config:
     STATIC_INFO_SERVICE_URL = os.getenv(
         "STATIC_INFO_SERVICE_URL", "http://static-info-service:80/static-info"
     )
+    NOTICE_SERVICE_URL = os.getenv(
+        "NOTICE_SERVICE_URL", "http://notice-notification:8081/notice-notification"
+    )
     DATABASE_URL = os.getenv(
         "DATABASE_URL", "sqlite+aiosqlite:///./kakao_bot_service.db"
     )
