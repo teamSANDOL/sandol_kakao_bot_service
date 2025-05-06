@@ -31,9 +31,9 @@ def make_notice_response(
                 ],
             )
         )
-    for i in range(0, len(notice_list), 5):
-        carousel = CarouselComponent()
-        items = notice_list[i:i+5]
+    carousel = CarouselComponent()
+    for i in range(0, len(notice_list), 4):
+        items = notice_list[i:i+4]
         carousel_items = [
             notice_to_list_item(notice)
             for notice in items
@@ -42,7 +42,8 @@ def make_notice_response(
             ListCardComponent(
                 header="공지사항",
                 items=carousel_items,
+                max_items=4,
             )
         )
-        response.add_component(carousel)
+    response.add_component(carousel)
     return response
