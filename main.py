@@ -11,7 +11,7 @@ from kakao_chatbot.response import KakaoResponse
 from kakao_chatbot.response.components import SimpleTextComponent
 import uvicorn
 
-from app.routers import meal_router, user_router, statics_router
+from app.routers import meal_router, user_router, statics_router, notice_router
 from app.config import Config, logger
 from app.database import init_db
 from app.utils.lifespan import set_service_account
@@ -49,6 +49,7 @@ app = FastAPI(lifespan=lifespan, root_path="/kakao-bot")
 app.include_router(meal_router)
 app.include_router(user_router)
 app.include_router(statics_router)
+app.include_router(notice_router)
 
 
 @app.exception_handler(Exception)
