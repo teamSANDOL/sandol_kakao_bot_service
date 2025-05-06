@@ -100,6 +100,12 @@ async def get_id(payload: Annotated[Payload, Depends(parse_payload)]):
     return JSONResponse(response.get_dict())
 
 
+@app.get("/health")
+async def health_check():
+    """Health check 엔드포인트입니다."""
+    return JSONResponse({"status": "ok"})
+
+
 if __name__ == "__main__":
     logger.info("Starting Sandol server")
     uvicorn.run("app:app", host="0.0.0.0", port=5600, reload=True)
