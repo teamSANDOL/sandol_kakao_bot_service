@@ -21,7 +21,7 @@ def make_notice_response(
 ) -> KakaoResponse:
     """공지사항 목록을 반환합니다."""
     response = KakaoResponse()
-    if len(notice_list) == 5:
+    if len(notice_list) == ListCardComponent(header="").max_items:
         return response.add_component(
             ListCardComponent(
                 header="공지사항",
