@@ -49,7 +49,7 @@ class Config:
 
     debug = os.getenv("DEBUG", "False").lower() == "true"
 
-    SERVICE_ID: str = os.getenv("SERVICE_ID", "4")
+    SERVICE_ID: str = str(os.getenv("SERVICE_ID", 4))
 
     USER_SERVICE_URL = os.getenv("USER_SERVICE_URL", "http://user-service:8000/user").rstrip("/")
     MEAL_SERVICE_URL = os.getenv("MEAL_SERVICE_URL", "http://meal-service:80/meal").rstrip("/")
