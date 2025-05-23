@@ -66,15 +66,21 @@ async def get_notice_by_author(
     author: str,
     size: int = 20,
     search_page_size: int = 50,
+    is_dormitory: bool = False,
 ) -> List[Notice]:
     """특정 작성자의 공지사항 목록을 가져옵니다."""
     authors_notice_list: List[Notice] = []
     page = 1
     while len(authors_notice_list) < size:
         logger.debug(f"Fetching page {page} for author '{author}'")
-        notice_list = await get_notice_list(
-            client=client, page=page, page_size=search_page_size
-        )
+        if is_dormitory:
+            notice_list = await get_dorm_notice_list(
+                client=client, page=page, page_size=search_page_size
+            )
+        else:
+            notice_list = await get_notice_list(
+                client=client, page=page, page_size=search_page_size
+            )
         filtered = [notice for notice in notice_list if author in notice.author]
         logger.debug(f"Filtered {len(filtered)} notices by author")
         authors_notice_list.extend(filtered)

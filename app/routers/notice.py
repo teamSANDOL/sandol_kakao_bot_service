@@ -79,7 +79,10 @@ async def notice_list(
         )
     else:
         logger.info(f"{org} 조직의 공지사항을 요청했습니다.")
-        notice_list = await get_notice_by_author(client=client, author=org)
+        notice_list, dorm_notice_list = await asyncio.gather(
+            get_notice_by_author(client=client, author=org),
+            get_notice_by_author(client=client, author=org, is_dormitory=True),
+        )
 
     response = KakaoResponse()
 
