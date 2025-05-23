@@ -1,3 +1,8 @@
+"""공지사항 관련 API 파일입니다.
+
+공지사항을 조회하고 반환하는 API를 제공합니다.
+"""
+
 import asyncio
 from typing import Annotated
 from fastapi import APIRouter, Depends

@@ -1,3 +1,8 @@
+"""공지사항 API를 통해 공지사항을 가져오는 API입니다.
+
+일반 공지사항과 기숙사 공지사항을 가져오는 API를 활용합니다.
+"""
+
 from typing import List, Optional
 
 from app.config import Config, logger
@@ -11,7 +16,11 @@ async def get_notice_list(
     page_size: Optional[int] = 20,
     raise_on_error: bool = False,
 ) -> List[Notice]:
-    """공지사항 목록을 가져옵니다."""
+    """공지사항 목록을 가져옵니다.
+
+    공지사항 목록을 가져와 리스트 카드 형태로 반환합니다.
+    공지사항이 없는 경우 "공지사항이 없습니다."라는 메시지를 반환합니다.
+    """
     url = f"{Config.NOTICE_SERVICE_URL}/notice"
     params = {
         "page": page,
@@ -28,7 +37,9 @@ async def get_notice_list(
         return []
 
     notice_response = NoticeResponse(**response.json())
-    logger_data = [f"Notice ID: {item.id}, Title: {item.title}" for item in notice_response.items]
+    logger_data = [
+        f"Notice ID: {item.id}, Title: {item.title}" for item in notice_response.items
+    ]
     logger.debug(f"Parsed dorm notices: {logger_data}")
     return notice_response.items
 
@@ -56,7 +67,9 @@ async def get_dorm_notice_list(
         return []
 
     notice_response = NoticeResponse(**response.json())
-    logger_data = [f"Notice ID: {item.id}, Title: {item.title}" for item in notice_response.items]
+    logger_data = [
+        f"Notice ID: {item.id}, Title: {item.title}" for item in notice_response.items
+    ]
     logger.debug(f"Parsed dorm notices: {logger_data}")
     return notice_response.items
 
