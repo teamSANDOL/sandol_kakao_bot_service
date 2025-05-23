@@ -27,10 +27,10 @@ async def get_notice_list(
             raise Exception(f"Error: {response.status_code} - {response.text}")
         return []
 
-    data = response.json()
-    logger_data = [f"Notice ID: {item.id}, Title: {item.title}" for item in data.items]
-    logger.debug(f"Response data: {logger_data}")
-    return NoticeResponse(**data).items
+    notice_response = NoticeResponse(**response.json())
+    logger_data = [f"Notice ID: {item.id}, Title: {item.title}" for item in notice_response.items]
+    logger.debug(f"Parsed dorm notices: {logger_data}")
+    return notice_response.items
 
 
 async def get_dorm_notice_list(
@@ -55,10 +55,10 @@ async def get_dorm_notice_list(
             raise Exception(f"Error: {response.status_code} - {response.text}")
         return []
 
-    data = response.json()
-    logger_data = [f"Notice ID: {item.id}, Title: {item.title}" for item in data.items]
-    logger.debug(f"Response data: {logger_data}")
-    return NoticeResponse(**data).items
+    notice_response = NoticeResponse(**response.json())
+    logger_data = [f"Notice ID: {item.id}, Title: {item.title}" for item in notice_response.items]
+    logger.debug(f"Parsed dorm notices: {logger_data}")
+    return notice_response.items
 
 
 async def get_notice_by_author(
