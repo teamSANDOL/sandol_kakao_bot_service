@@ -75,7 +75,7 @@ async def get_notice_by_author(
         notice_list = await get_notice_list(
             client=client, page=page, page_size=search_page_size
         )
-        filtered = [notice for notice in notice_list if notice.author == author]
+        filtered = [notice for notice in notice_list if author in notice.author]
         logger.debug(f"Filtered {len(filtered)} notices by author")
         authors_notice_list.extend(filtered)
         if len(notice_list) < search_page_size:

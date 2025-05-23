@@ -72,8 +72,8 @@ async def notice_list(
             get_notice_list(client=client, page=1, page_size=20),
             get_dorm_notice_list(client=client, page=1, page_size=20),
         )
-    elif org == "기숙사":
-        logger.info("기숙사 공지사항만 요청했습니다.")
+    elif org == "생활관":
+        logger.info("생활관 공지사항만 요청했습니다.")
         dorm_notice_list = await get_dorm_notice_list(
             client=client, page=1, page_size=20
         )
@@ -86,7 +86,7 @@ async def notice_list(
     if notice_list:
         response.add_component(
             make_notice_component(
-                notice_list, is_author=(bool(org) and org != "기숙사")
+                notice_list, is_author=(bool(org) and org != "생활관")
             )
         )
 
@@ -94,11 +94,17 @@ async def notice_list(
         response.add_component(
             make_notice_component(dorm_notice_list, is_dormitory=True)
         )
+
+    if not notice_list and not dorm_notice_list:
+        return JSONResponse(
+            content=KakaoResponse(
+                component_list=[
+                    SimpleTextComponent(text="공지사항이 없습니다."),
+                ]
+            ).get_dict(),
+            status_code=200,
+        )
     return JSONResponse(
-        content=KakaoResponse(
-            component_list=[
-                SimpleTextComponent(text="공지사항이 없습니다."),
-            ]
-        ).get_dict(),
+        content=response.get_dict(),
         status_code=200,
     )

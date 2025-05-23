@@ -45,7 +45,7 @@ def make_notice_component(
         author = notice_list[0].author
         header = f"{author} 공지사항"
     elif is_dormitory:
-        header = "기숙사 공지사항"
+        header = "생활관 공지사항"
     else:
         header = "공지사항"
 
