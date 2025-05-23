@@ -31,7 +31,11 @@ file_handler.setFormatter(file_formatter)
 
 # 핸들러 2: 콘솔에 INFO 이상만 출력 (간결한 버전)
 console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)  # INFO 이상만 출력
+if os.getenv("DEBUG", "False").lower() == "true":
+    console_handler.setLevel(logging.DEBUG)  # DEBUG 이상 출력
+else:
+    # DEBUG 모드가 아닐 때는 INFO 이상만 출력
+    console_handler.setLevel(logging.INFO)  # INFO 이상만 출력
 console_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 console_handler.setFormatter(console_formatter)
 
