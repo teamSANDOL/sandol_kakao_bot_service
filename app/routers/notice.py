@@ -1,6 +1,8 @@
+import asyncio
 from typing import Annotated
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
+from kakao_chatbot import Payload
 from kakao_chatbot.response import (
     KakaoResponse,
 )
@@ -10,11 +12,16 @@ from kakao_chatbot.response.components import (
 
 from app.config import logger
 from app.schemas.notice import Notice
-from app.services.notice_service import get_notice_list
+from app.services.notice_service import (
+    get_dorm_notice_list,
+    get_notice_by_author,
+    get_notice_list,
+)
 from app.utils import create_openapi_extra
 from app.utils.auth_client import get_service_xuser_client
 from app.utils.http import XUserIDClient
-from app.utils.notice import make_notice_response
+from app.utils.kakao import parse_payload
+from app.utils.notice import make_notice_component
 
 notice_router = APIRouter(prefix="/notice")
 
@@ -22,10 +29,17 @@ notice_router = APIRouter(prefix="/notice")
 @notice_router.post(
     "/list",
     openapi_extra=create_openapi_extra(
-        utterance="공지",
+        detail_params={
+            "organization": {
+                "origin": "기숙사",
+                "value": "생활관",
+            },
+        },
+        utterance="기숙사 공지사항",
     ),
 )
 async def notice_list(
+    payload: Annotated[Payload, Depends(parse_payload)],
     client: Annotated[XUserIDClient, Depends(get_service_xuser_client)],
 ):
     """공지사항 목록을 가져옵니다.
@@ -35,6 +49,7 @@ async def notice_list(
     공지사항이 5개 이하인 경우 리스트 카드로 반환하고,
     5개 초과인 경우 Carousel 안에 리스트카드를 넣어 반환합니다.
     최대 20개까지 가져옵니다.
+    공지사항도 기숙사  별도로 동일하게 제공합니다.
 
     ## 카카오 챗봇  연결 정보
     ---
@@ -48,13 +63,36 @@ async def notice_list(
     Returns:
         JSONResponse: 공지사항 목록
     """
-    logger.info("공지사항 목록을 가져옵니다.")
-    notice_list: list[Notice] = await get_notice_list(
-        client=client, page=1, page_size=20
-    )
+    org = payload.action.params.get("organization", None)
+    notice_list: list[Notice] = []
+    dorm_notice_list: list[Notice] = []
+    if org is None:
+        logger.info("전체 공지사항을 요청했습니다.")
+        notice_list, dorm_notice_list = await asyncio.gather(
+            get_notice_list(client=client, page=1, page_size=20),
+            get_dorm_notice_list(client=client, page=1, page_size=20),
+        )
+    elif org == "기숙사":
+        logger.info("기숙사 공지사항만 요청했습니다.")
+        dorm_notice_list = await get_dorm_notice_list(
+            client=client, page=1, page_size=20
+        )
+    else:
+        logger.info(f"{org} 조직의 공지사항을 요청했습니다.")
+        notice_list = await get_notice_by_author(client=client, author=org)
+
+    response = KakaoResponse()
+
     if notice_list:
-        return JSONResponse(
-            make_notice_response(notice_list).get_dict(), status_code=200
+        response.add_component(
+            make_notice_component(
+                notice_list, is_author=(bool(org) and org != "기숙사")
+            )
+        )
+
+    if dorm_notice_list:
+        response.add_component(
+            make_notice_component(dorm_notice_list, is_dormitory=True)
         )
     return JSONResponse(
         content=KakaoResponse(
