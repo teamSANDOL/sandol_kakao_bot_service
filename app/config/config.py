@@ -53,19 +53,27 @@ class Config:
 
     debug = os.getenv("DEBUG", "False").lower() == "true"
 
-    SERVICE_ID: str = str(os.getenv("SERVICE_ID", 4))
+    SERVICE_ID: str = os.getenv("SERVICE_ID", "4")
 
-    USER_SERVICE_URL = os.getenv("USER_SERVICE_URL", "http://user-service:8000/user").rstrip("/")
-    MEAL_SERVICE_URL = os.getenv("MEAL_SERVICE_URL", "http://meal-service:80/meal").rstrip("/")
-    STATIC_INFO_SERVICE_URL = os.getenv(
-        "STATIC_INFO_SERVICE_URL", "http://static-info-service:80/static-info"
-    )
-    NOTICE_SERVICE_URL = os.getenv(
-        "NOTICE_SERVICE_URL", "http://notice-notification:8081/notice-notification"
-    )
     DATABASE_URL = os.getenv(
         "DATABASE_URL", "sqlite+aiosqlite:///./kakao_bot_service.db"
     )
+    USER_SERVICE_URL = os.getenv(
+        "USER_SERVICE_URL", "http://user-service:8000/user"
+    ).rstrip("/")
+    MEAL_SERVICE_URL = os.getenv(
+        "MEAL_SERVICE_URL", "http://meal-service:80/meal"
+    ).rstrip("/")
+    STATIC_INFO_SERVICE_URL = os.getenv(
+        "STATIC_INFO_SERVICE_URL", "http://static-info-service:80/static-info"
+    ).rstrip("/")
+    NOTICE_SERVICE_URL = os.getenv(
+        "NOTICE_SERVICE_URL", "http://notice-notification:8081/notice-notification"
+    ).rstrip("/")
+    CLASSTROOM_TIMETABLE_SERVICE_URL = os.getenv(
+        "CLASSTROOM_TIMETABLE_SERVICE_URL",
+        "http://classroom-timetable-service:80/classroom-timetable",
+    ).rstrip("/")
 
     TIMEZONE = os.getenv("TIMEZONE", "Asia/Seoul")
     TZ = timezone(TIMEZONE)
