@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from pydantic import TypeAdapter
 
 from app.config import Config, logger
-from app.schemas.classroom_timetable import EmptyClassroomInfo
+from app.schemas.classroom import EmptyClassroomInfo
 from app.utils import get_korean_day
 
 from app.utils.http import XUserIDClient
