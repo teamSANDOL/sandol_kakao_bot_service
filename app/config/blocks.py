@@ -22,6 +22,7 @@ class BlockID(str, Enum):
     DECLINE_RESTAURANT = "674031c1aeded40bd4bd58d9"
     RESTAURANT_INFO = "672183965e0ed128077abfe3"
     SELECT_RESTAURANT = "67f3d3080e01a1241f2707c7"
+    CLASSROOM_DETAIL = "683585d52a22a85698b931d5"
 
 
 def get_cafeteria_register_quick_replies(
