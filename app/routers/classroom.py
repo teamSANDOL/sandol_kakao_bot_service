@@ -110,7 +110,7 @@ async def empty_classroom_now(
     return JSONResponse(KakaoResponse(component_list=components).get_dict())
 
 
-@classromm_router.post(
+@classroom_router.post(
     "/empty/period",
     openapi_extra=create_openapi_extra(
         detail_params={
