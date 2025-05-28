@@ -25,7 +25,8 @@ from app.utils.http import XUserIDClient
 from app.utils.kakao import KakaoError, parse_payload
 
 # 방 번호에서 앞자리(층)와 뒤 2자리(호실)를 분리하는 정규식
-pattern = re.compile(r'^(\d+)(\d{2})호$')
+pattern = re.compile(r"^(\d+)(\d{2})호$")
+
 
 def parse_floor(room: str) -> int | None:
     m = pattern.match(room)
@@ -37,16 +38,12 @@ def make_empty_classroom_component(
 ) -> ItemCardComponent:
     """빈 강의실 목록을 카카오톡 챗봇의 카드 형식으로 변환합니다."""
     if not empty_classrooms.empty_classrooms:
-        raise ValueError(
-            f"{empty_classrooms.building}에 빈 강의실이 없습니다."
-        )
+        raise ValueError(f"{empty_classrooms.building}에 빈 강의실이 없습니다.")
     classrooms_by_floor: dict[int, List[Classroom]] = {}
     for classroom in empty_classrooms.empty_classrooms:
         floor = parse_floor(classroom.room_name)
         if floor is None:
-            logger.warning(
-                f"'{classroom.room_name}'의 형식이 잘못되어 무시되었습니다."
-            )
+            logger.warning(f"'{classroom.room_name}'의 형식이 잘못되어 무시되었습니다.")
             continue
         if floor in classrooms_by_floor:
             classrooms_by_floor[floor].append(classroom)
@@ -55,9 +52,9 @@ def make_empty_classroom_component(
     items: list[Item] = []
     for floor, classrooms in sorted(classrooms_by_floor.items()):
         if len(classrooms) > 1:
-            description=f"{classrooms[0].room_name}외 {len(classrooms) - 1}개"
+            description = f"{classrooms[0].room_name}외 {len(classrooms) - 1}개"
         else:
-            description=classrooms[0].room_name
+            description = classrooms[0].room_name
         items.append(
             Item(
                 title=f"{floor}층",
@@ -75,6 +72,7 @@ def make_empty_classroom_component(
     )
     return card
 
+
 def make_empty_classroom_components(
     empty_list: List[EmptyClassroomInfo],
 ) -> List[ItemCardComponent] | List[CarouselComponent] | List[SimpleTextComponent]:
@@ -88,10 +86,7 @@ def make_empty_classroom_components(
     if not empty_list:
         return [SimpleTextComponent(text="빈 강의실 정보가 없습니다.")]
 
-    empty_list = sorted(
-        empty_list,
-        key=lambda x: (x.building == "미래", x.building)
-    )
+    empty_list = sorted(empty_list, key=lambda x: (x.building == "미래", x.building))
 
     alphabet_components = []
     non_alphabet_components = []
@@ -111,12 +106,17 @@ def make_empty_classroom_components(
 
     result: list[CarouselComponent] | list[ItemCardComponent] = []
 
-    def to_carousels(components: list[ItemCardComponent]) -> list[CarouselComponent] | list[ItemCardComponent]:
+    def to_carousels(
+        components: list[ItemCardComponent],
+    ) -> list[CarouselComponent] | list[ItemCardComponent]:
         if not components:
             return []
         if len(components) == 1:
             return [components[0]]
-        return [CarouselComponent(*components[i:i+10]) for i in range(0, len(components), 10)]
+        return [
+            CarouselComponent(*components[i : i + 10])
+            for i in range(0, len(components), 10)
+        ]
 
     result.extend(to_carousels(alphabet_components))
     result.extend(to_carousels(non_alphabet_components))

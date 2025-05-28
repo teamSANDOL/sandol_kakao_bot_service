@@ -15,7 +15,10 @@ from kakao_chatbot.response.components import (
 
 from app.config import logger
 from app.schemas.classroom import Classroom, EmptyClassroomInfo
-from app.services.classroom_timetable_serivce import search_empty_classroom_by_time, search_empty_classroom_now
+from app.services.classroom_timetable_serivce import (
+    search_empty_classroom_by_time,
+    search_empty_classroom_now,
+)
 from app.utils import create_openapi_extra
 from app.utils.auth_client import get_service_xuser_client
 from app.utils.http import XUserIDClient
@@ -59,7 +62,9 @@ async def empty_classroom_by_time(
         return JSONResponse(
             KakaoResponse(
                 component_list=[
-                    SimpleTextComponent(text="빈 강의실 조회에 필요한 파라미터가 부족합니다.")
+                    SimpleTextComponent(
+                        text="빈 강의실 조회에 필요한 파라미터가 부족합니다."
+                    )
                 ]
             ).get_dict()
         )
@@ -73,14 +78,13 @@ async def empty_classroom_by_time(
         f"end_time={end_time}"
     )
 
-    empty_classrooms = await search_empty_classroom_by_time(client, day, start_time, end_time)
+    empty_classrooms = await search_empty_classroom_by_time(
+        client, day, start_time, end_time
+    )
 
     components = make_empty_classroom_components(empty_classrooms)
 
-    return JSONResponse(KakaoResponse(
-        component_list=components
-    ).get_dict()
-    )
+    return JSONResponse(KakaoResponse(component_list=components).get_dict())
 
 
 @classroom_router.post(
@@ -102,7 +106,4 @@ async def empty_classroom_now(
 
     components = make_empty_classroom_components(empty_classrooms)
 
-    return JSONResponse(KakaoResponse(
-        component_list=components
-    ).get_dict()
-    )
+    return JSONResponse(KakaoResponse(component_list=components).get_dict())

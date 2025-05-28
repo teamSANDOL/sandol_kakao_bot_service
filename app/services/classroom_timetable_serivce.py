@@ -101,7 +101,9 @@ async def search_empty_classroom_now(
     now = datetime.now(Config.TZ)
     day = f"{get_korean_day(now.weekday())}요일"  # 현재 요일 (예: "월요일")
     start_time = now.strftime("%H:%M")  # 현재 시간 (예: "09:00")
-    end_time = (now + timedelta(minutes=1)).strftime("%H:%M")  # 1분 후 시간 (예: "09:30")
+    end_time = (now + timedelta(minutes=1)).strftime(
+        "%H:%M"
+    )  # 1분 후 시간 (예: "09:30")
     return await search_empty_classroom_by_time(
         client,
         day=day,  # type: ignore[arg-type]
