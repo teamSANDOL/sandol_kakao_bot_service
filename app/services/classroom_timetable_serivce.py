@@ -34,7 +34,7 @@ async def search_empty_classroom_by_time(
         f"search_empty_classroom_by_time called with day={day}, start_time={start_time}, end_time={end_time}"
     )
     response = await client.get(
-        f"{Config.STATIC_INFO_SERVICE_URL}/classroom/empty/time",
+        f"{Config.CLASSTROOM_TIMETABLE_SERVICE_URL}/classrooms/available/time",
         params={
             "day": day,
             "start_time": start_time,
@@ -42,10 +42,10 @@ async def search_empty_classroom_by_time(
         },
     )
     response.raise_for_status()
-    logger.debug(
-        f"Response from search_empty_classroom_by_time: {response.status_code}\n"
-        f"{json.dumps(response.json(), ensure_ascii=False, indent=2)}"
-    )
+    # logger.debug(
+    #     f"Response from search_empty_classroom_by_time: {response.status_code}\n"
+    #     f"{json.dumps(response.json(), ensure_ascii=False, indent=2)}"
+    # )
     adapter = TypeAdapter(List[EmptyClassroomInfo])
     return adapter.validate_python(response.json())
 
@@ -71,7 +71,7 @@ async def search_empty_classroom_by_period(
         f"search_empty_classroom_by_period called with day={day}, start_period={start_period}, end_period={end_period}"
     )
     response = await client.get(
-        f"{Config.STATIC_INFO_SERVICE_URL}/classroom/empty/period",
+        f"{Config.CLASSTROOM_TIMETABLE_SERVICE_URL}/classrooms/available/period",
         params={
             "day": day,
             "start_time": str(start_period),
@@ -79,10 +79,10 @@ async def search_empty_classroom_by_period(
         },
     )
     response.raise_for_status()
-    logger.debug(
-        f"Response from search_empty_classroom_by_period: {response.status_code}\n"
-        f"{json.dumps(response.json(), ensure_ascii=False, indent=2)}"
-    )
+    # logger.debug(
+    #     f"Response from search_empty_classroom_by_period: {response.status_code}\n"
+    #     f"{json.dumps(response.json(), ensure_ascii=False, indent=2)}"
+    # )
     adapter = TypeAdapter(List[EmptyClassroomInfo])
     return adapter.validate_python(response.json())
 

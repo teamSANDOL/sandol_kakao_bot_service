@@ -83,6 +83,12 @@ async def empty_classroom_by_time(
     )
 
 
+@classroom_router.post(
+    "/empty/now",
+    openapi_extra=create_openapi_extra(
+        utterance="현재 빈 강의실",
+    ),
+)
 async def empty_classroom_now(
     client: Annotated[XUserIDClient, Depends(get_service_xuser_client)],
 ):
