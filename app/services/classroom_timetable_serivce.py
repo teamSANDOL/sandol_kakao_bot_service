@@ -71,7 +71,7 @@ async def search_empty_classroom_by_period(
         f"search_empty_classroom_by_period called with day={day}, start_period={start_period}, end_period={end_period}"
     )
     response = await client.get(
-        f"{Config.CLASSTROOM_TIMETABLE_SERVICE_URL}/classrooms/available/period",
+        f"{Config.CLASSTROOM_TIMETABLE_SERVICE_URL}/classrooms/available/periods",
         params={
             "day": day,
             "start_time": str(start_period),
