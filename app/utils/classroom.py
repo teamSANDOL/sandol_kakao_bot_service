@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 import json
 import re
+import string
 from datetime import datetime
 from typing import Annotated, List, Optional, overload
 
@@ -92,23 +93,32 @@ def make_empty_classroom_components(
         key=lambda x: (x.building == "미래", x.building)
     )
 
-    components = []
+    alphabet_components = []
+    non_alphabet_components = []
+
     for empty_classrooms in empty_list:
         try:
-            components.append(
-                make_empty_classroom_component(empty_classrooms)
-            )
+            component = make_empty_classroom_component(empty_classrooms)
+            if empty_classrooms.building[0] in string.ascii_letters:
+                alphabet_components.append(component)
+            else:
+                non_alphabet_components.append(component)
         except ValueError as e:
             logger.warning(e)
 
-    if not components:
+    if not alphabet_components and not non_alphabet_components:
         return [SimpleTextComponent(text="빈 강의실 정보가 없습니다.")]
 
-    if len(components) == 1:
-        return [components[0]]
+    result: list[CarouselComponent] | list[ItemCardComponent] = []
 
-    carousels = []
-    for i in range(0, len(components), 10):
-        carousels.append(CarouselComponent(*components[i:i+10]))
+    def to_carousels(components: list[ItemCardComponent]) -> list[CarouselComponent] | list[ItemCardComponent]:
+        if not components:
+            return []
+        if len(components) == 1:
+            return [components[0]]
+        return [CarouselComponent(*components[i:i+10]) for i in range(0, len(components), 10)]
 
-    return carousels
+    result.extend(to_carousels(alphabet_components))
+    result.extend(to_carousels(non_alphabet_components))
+
+    return result
