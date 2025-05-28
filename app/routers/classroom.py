@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from kakao_chatbot import Payload
+from kakao_chatbot.input import Param
 from kakao_chatbot.response import (
     KakaoResponse,
 )
@@ -50,12 +51,25 @@ async def empty_classroom_by_time(
 
     빈 강의실을 조회하여 리스트 카드 형태로 반환합니다.
     """
-    day = payload.action.detail_params.get("day", "월요일")
-    start_time = payload.action.detail_params.get("start_time", "09:00")
-    end_time = payload.action.detail_params.get("end_time", "10:00")
+    day_param = payload.action.detail_params.get("day")
+    start_time_param = payload.action.detail_params.get("start_time")
+    end_time_param = payload.action.detail_params.get("end_time")
+    if not day_param or not start_time_param or not end_time_param:
+        return JSONResponse(
+            KakaoResponse(
+                component_list=[
+                    SimpleTextComponent(text="빈 강의실 조회에 필요한 파라미터가 부족합니다.")
+                ]
+            ).get_dict()
+        )
+    day = day_param.value
+    start_time = start_time_param.value
+    end_time = end_time_param.value
 
     logger.info(
-        f"시간 기준 빈 강의실 조회 called with day={day}, start_time={start_time}, end_time={end_time}"
+        f"시간 기준 빈 강의실 조회 called with day={day},"
+        f"start_time={start_time},"
+        f"end_time={end_time}"
     )
 
     empty_classrooms = await search_empty_classroom_by_time(client, day, start_time, end_time)
