@@ -17,6 +17,7 @@ from app.config import logger
 from app.schemas.classroom import Classroom, EmptyClassroomInfo
 from app.services.classroom_timetable_serivce import (
     search_empty_classroom_by_time,
+    search_empty_classroom_by_period,
     search_empty_classroom_now,
 )
 from app.utils import create_openapi_extra
@@ -106,4 +107,59 @@ async def empty_classroom_now(
 
     components = make_empty_classroom_components(empty_classrooms)
 
+    return JSONResponse(KakaoResponse(component_list=components).get_dict())
+
+
+@classromm_router.post(
+    "/empty/period",
+    openapi_extra=create_openapi_extra(
+        detail_params={
+            "day": {
+                "origin": "월",
+                "value": "월요일",
+            },
+            "start_period": {
+                "origin": "1교시",
+                "value": 1,
+            },
+            "end_period": {
+                "origin": "2교시",
+                "value": 2,
+            },
+        },
+    ),
+)
+async def empty_classroom_by_period(
+    payload: Annotated[Payload, Depends(parse_payload)],
+    client: Annotated[XUserIDClient, Depends(get_service_xuser_client)],
+):
+    """빈 강의실을 조회합니다.
+
+    빈 강의실을 조회하여 리스트 카드 형태로 반환합니다.
+    """
+    day_param = payload.action.detail_params.get("day")
+    start_period_param = payload.action.detail_params.get("start_period")
+    end_period_param = payload.action.detail_params.get("end_period")
+    if not day_param or not start_period_param or not end_period_param:
+        return JSONResponse(
+            KakaoResponse(
+                component_list=[
+                    SimpleTextComponent(
+                        text="빈 강의실 조회에 필요한 파라미터가 부족합니다."
+                    )
+                ]
+            ).get_dict()
+        )
+    day: str = day_param.value
+    start_period: str = start_period_param.value
+    end_period: str = end_period_param.value
+    logger.info(
+        f"교시 기준 빈 강의실 조회 called with day={day},"
+        f"start_period={start_period},"
+        f"end_period={end_period}"
+    )
+    empty_classrooms = await search_empty_classroom_by_period(
+        client, day, start_period, end_period
+    )
+    components = make_empty_classroom_components(empty_classrooms)
     return JSONResponse(KakaoResponse(component_list=components).get_dict())
