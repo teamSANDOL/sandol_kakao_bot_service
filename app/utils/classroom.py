@@ -87,6 +87,11 @@ def make_empty_classroom_components(
     if not empty_list:
         return [SimpleTextComponent(text="빈 강의실 정보가 없습니다.")]
 
+    empty_list = sorted(
+        empty_list,
+        key=lambda x: (x.building == "미래", x.building)
+    )
+
     components = []
     for empty_classrooms in empty_list:
         try:
