@@ -50,7 +50,13 @@ def make_empty_classroom_component(
             classrooms_by_floor[floor].append(classroom)
         else:
             classrooms_by_floor[floor] = [classroom]
-    empty_classrooms.empty_classrooms_by_floor = classrooms_by_floor
+    empty_classrooms.empty_classrooms_by_floor = dict(
+        sorted(
+            classrooms_by_floor.items(),
+            key=lambda x: x[0]  # int 기준 정렬
+        )
+    )
+
 
     items: list[Item] = []
     for floor, classrooms in sorted(classrooms_by_floor.items()):
@@ -129,21 +135,23 @@ def make_empty_classroom_components(
 
     return result
 
+
 def make_empty_classroom_detail_component(
     info: str,
 ) -> CarouselComponent:
     """빈 강의실 상세 정보를 카드 형식으로 변환합니다."""
-    empty_classroom_info = EmptyClassroomInfo.model_validate_json(info)
-    if not empty_classroom_info.empty_classrooms_by_floor:
-        raise KakaoError(f"{empty_classroom_info.building}에 빈 강의실이 없습니다.")
+    empty_classrooms = EmptyClassroomInfo.model_validate(info)
+    if not empty_classrooms.empty_classrooms_by_floor:
+        raise KakaoError(f"{empty_classrooms.building}에 빈 강의실이 없습니다.")
 
     carousel = CarouselComponent()
-    for floor, classrooms in empty_classroom_info.empty_classrooms_by_floor.items():
+
+    for floor, classrooms in empty_classrooms.empty_classrooms_by_floor.items():
         description = "\n".join(
-            f"{classroom.room_name}호" for classroom in classrooms
+            f"{classroom.room_name}" for classroom in classrooms
         )
         card = TextCardComponent(
-            title=f"{empty_classroom_info.building} {floor}층",
+            title=f"{empty_classrooms.building} {floor}층",
             description=description,
         )
         carousel.add_item(card)
