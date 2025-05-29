@@ -25,13 +25,18 @@ from app.utils.user import get_current_user
 from app.utils.http import XUserIDClient
 from app.utils.kakao import KakaoError, parse_payload
 
-# 방 번호에서 앞자리(층)와 뒤 2자리(호실)를 분리하는 정규식
-pattern = re.compile(r"^(\d+)(\d{2})호$")
-
 
 def parse_floor(room: str) -> int | None:
-    m = pattern.match(room)
-    return int(m.group(1)) if m else None
+    # 대강당은 1층으로 처리
+    if room == "대강당":
+        return 1
+
+    # 606-1, 416-A, 210A 등 숫자로 시작하는 경우
+    m = re.match(r"^(\d+)", room)
+    if m:
+        return int(m.group(1)) // 100  # 416 → 4층, 606 → 6층
+
+    return None
 
 
 def make_empty_classroom_component(
