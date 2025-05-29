@@ -1,5 +1,5 @@
 """이 모듈은 교실 및 빈 강의실 정보를 나타내는 데이터 모델을 정의합니다."""
-from typing import List, Literal
+from typing import Dict, List, Literal
 
 from pydantic import BaseModel, field_validator
 
@@ -40,6 +40,7 @@ class EmptyClassroomInfo(BaseModel):
     """
     building: BuildingName
     empty_classrooms: List[Classroom]
+    empty_classrooms_by_floor: Dict[int, List[Classroom]] = []
 
     @field_validator("empty_classrooms", mode="before")
     @classmethod

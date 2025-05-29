@@ -25,7 +25,7 @@ from app.utils import create_openapi_extra
 from app.utils.auth_client import get_service_xuser_client
 from app.utils.http import XUserIDClient
 from app.utils.kakao import parse_payload
-from app.utils.classroom import make_empty_classroom_components
+from app.utils.classroom import make_empty_classroom_components, make_empty_classroom_detail_component
 
 classroom_router = APIRouter(prefix="/classroom")
 
@@ -171,3 +171,33 @@ async def empty_classroom_by_period(
     )
     components = make_empty_classroom_components(empty_classrooms)
     return JSONResponse(KakaoResponse(component_list=components).get_dict())
+
+
+@classroom_router.post(
+    "/empty/detail",
+    openapi_extra=create_openapi_extra(
+        client_extra={
+            "empty_classroom_info": {
+                "building": "A동",
+                "empty_classrooms": [
+                    {"room_name": "101호"},
+                    {"room_name": "102호"},
+                ],
+                "empty_classrooms_by_floor": {
+                    1: [{"room_name": "101호"}, {"room_name": "102호"}],
+                },
+            }
+        },
+    ),
+)
+async def empty_classroom_detail(
+    payload: Annotated[Payload, Depends(parse_payload)],
+) -> EmptyClassroomInfo:
+    """빈 강의실 상세 정보를 조회합니다."""
+    logger.info("빈 강의실 상세 정보 조회 called")
+    carousel = make_empty_classroom_detail_component(
+        info=payload.action.client_extra.get("empty_classroom_info")
+    )
+    response = KakaoResponse()
+    response.add_component(carousel)
+    return JSONResponse(response.get_dict())

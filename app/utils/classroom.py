@@ -15,6 +15,7 @@ from kakao_chatbot.response.components import (
     Item,
     CarouselComponent,
     SimpleTextComponent,
+    TextCardComponent,
 )
 
 from app.config import BlockID, logger
@@ -39,7 +40,7 @@ def make_empty_classroom_component(
     """빈 강의실 목록을 카카오톡 챗봇의 카드 형식으로 변환합니다."""
     if not empty_classrooms.empty_classrooms:
         raise ValueError(f"{empty_classrooms.building}에 빈 강의실이 없습니다.")
-    classrooms_by_floor: dict[int, List[Classroom]] = {}
+    classrooms_by_floor: dict[int, List[Classroom]] = {}}
     for classroom in empty_classrooms.empty_classrooms:
         floor = parse_floor(classroom.room_name)
         if floor is None:
@@ -49,6 +50,8 @@ def make_empty_classroom_component(
             classrooms_by_floor[floor].append(classroom)
         else:
             classrooms_by_floor[floor] = [classroom]
+    empty_classrooms.empty_classrooms_by_floor = classrooms_by_floor
+
     items: list[Item] = []
     for floor, classrooms in sorted(classrooms_by_floor.items()):
         if len(classrooms) > 1:
@@ -69,6 +72,9 @@ def make_empty_classroom_component(
         label="자세히 보기",
         action="block",
         block_id=BlockID.CLASSROOM_DETAIL,
+        extra={
+            "empty_classroom_info": empty_classrooms.model_dump(),
+        }
     )
     return card
 
@@ -122,3 +128,23 @@ def make_empty_classroom_components(
     result.extend(to_carousels(non_alphabet_components))
 
     return result
+
+def make_empty_classroom_detail_component(
+    info: str,
+) -> CarouselComponent:
+    """빈 강의실 상세 정보를 카드 형식으로 변환합니다."""
+    empty_classroom_info = EmptyClassroomInfo.model_validate_json(info)
+    if not empty_classroom_info.empty_classrooms_by_floor:
+        raise KakaoError(f"{empty_classroom_info.building}에 빈 강의실이 없습니다.")
+
+    carousel = CarouselComponent()
+    for floor, classrooms in empty_classroom_info.empty_classrooms_by_floor.items():
+        description = "\n".join(
+            f"{classroom.room_name}호" for classroom in classrooms
+        )
+        card = TextCardComponent(
+            title=f"{empty_classroom_info.building} {floor}층",
+            description=description,
+        )
+        carousel.add_item(card)
+    return carousel
