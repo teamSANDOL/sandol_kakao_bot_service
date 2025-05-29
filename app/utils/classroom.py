@@ -149,9 +149,14 @@ def make_empty_classroom_detail_component(
     if not empty_classrooms.empty_classrooms_by_floor:
         raise KakaoError(f"{empty_classrooms.building}에 빈 강의실이 없습니다.")
 
-    carousel = CarouselComponent()
+    # key를 int로 변환해서 정렬
+    sorted_floors = sorted(
+        ((int(k), v) for k, v in empty_classrooms.empty_classrooms_by_floor.items()),
+        key=lambda x: x[0]
+    )
 
-    for floor, classrooms in empty_classrooms.empty_classrooms_by_floor.items():
+    carousel = CarouselComponent()
+    for floor, classrooms in sorted_floors:
         description = "\n".join(
             f"{classroom.room_name}" for classroom in classrooms
         )
@@ -160,4 +165,5 @@ def make_empty_classroom_detail_component(
             description=description,
         )
         carousel.add_item(card)
+
     return carousel
