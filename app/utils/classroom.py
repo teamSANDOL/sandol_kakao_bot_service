@@ -40,7 +40,7 @@ def make_empty_classroom_component(
     """빈 강의실 목록을 카카오톡 챗봇의 카드 형식으로 변환합니다."""
     if not empty_classrooms.empty_classrooms:
         raise ValueError(f"{empty_classrooms.building}에 빈 강의실이 없습니다.")
-    classrooms_by_floor: dict[int, List[Classroom]] = {}}
+    classrooms_by_floor: dict[int, List[Classroom]] = {}
     for classroom in empty_classrooms.empty_classrooms:
         floor = parse_floor(classroom.room_name)
         if floor is None:
