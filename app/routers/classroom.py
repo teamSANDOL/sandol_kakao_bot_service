@@ -25,7 +25,10 @@ from app.utils import create_openapi_extra
 from app.utils.auth_client import get_service_xuser_client
 from app.utils.http import XUserIDClient
 from app.utils.kakao import parse_payload
-from app.utils.classroom import make_empty_classroom_components, make_empty_classroom_detail_component
+from app.utils.classroom import (
+    make_empty_classroom_components,
+    make_empty_classroom_detail_component,
+)
 
 classroom_router = APIRouter(prefix="/classroom")
 
@@ -53,9 +56,27 @@ async def empty_classroom_by_time(
     payload: Annotated[Payload, Depends(parse_payload)],
     client: Annotated[XUserIDClient, Depends(get_service_xuser_client)],
 ):
-    """빈 강의실을 조회합니다.
+    """빈 강의실을 시간 기준으로 조회합니다.
 
     빈 강의실을 조회하여 리스트 카드 형태로 반환합니다.
+
+    ## 카카오 챗봇 연결 정보
+    ---
+    - 동작방식: 버튼 연결
+
+    - OpenBuilder:
+        - 블럭: "시간 기준 강의실 찾기"
+        - 스킬: "시간 기준 강의실 찾기"
+
+    - Params:
+        - detail_params:
+            - day: 요일 (예: "월요일", "화요일" 등)
+            - start_time: 시작 시간 (예: "09:00")
+            - end_time: 종료 시간 (예: "10:00")
+    ---
+
+    Returns:
+        JSONResponse: 빈 강의실 정보가 담긴 JSON 응답
     """
     day_param = payload.action.detail_params.get("day")
     start_time_param = payload.action.detail_params.get("start_time")
@@ -101,6 +122,20 @@ async def empty_classroom_now(
     """현재 빈 강의실을 조회합니다.
 
     현재 시간에 빈 강의실을 조회하여 리스트 카드 형태로 반환합니다.
+
+    ## 카카오 챗봇 연결 정보
+    ---
+    - 동작방식: 발화, 버튼 연결
+        - 현재 비어있는 교실
+        - 지금 비어있는 강의실
+
+    - OpenBuilder:
+        - 블럭: "지금 빈 강의실"
+        - 스킬: "지금 빈 강의실"
+    ---
+
+    Returns:
+        JSONResponse: 현재 빈 강의실 정보가 담긴 JSON 응답
     """
     logger.info("현재 빈 강의실 조회 called")
 
@@ -134,9 +169,27 @@ async def empty_classroom_by_period(
     payload: Annotated[Payload, Depends(parse_payload)],
     client: Annotated[XUserIDClient, Depends(get_service_xuser_client)],
 ):
-    """빈 강의실을 조회합니다.
+    """빈 강의실을 교시 기준으로 조회합니다.
 
     빈 강의실을 조회하여 리스트 카드 형태로 반환합니다.
+
+    ## 카카오 챗봇 연결 정보
+    ---
+    - 동작방식: 버튼 연결
+
+    - OpenBuilder:
+        - 블럭: "교시 기준 강의실 찾기"
+        - 스킬: "교시 기준 강의실 찾기"
+
+    - Params:
+        - detail_params:
+            - day: 요일 (예: "월요일", "화요일" 등)
+            - start_period: 시작 교시 (예: "1교시")
+            - end_period: 종료 교시 (예: "2교시")
+    ---
+
+    Returns:
+        JSONResponse: 빈 강의실 정보가 담긴 JSON 응답
     """
     day_param = payload.action.detail_params.get("day")
     start_period_param = payload.action.detail_params.get("start_period")
@@ -193,7 +246,26 @@ async def empty_classroom_by_period(
 async def empty_classroom_detail(
     payload: Annotated[Payload, Depends(parse_payload)],
 ) -> EmptyClassroomInfo:
-    """빈 강의실 상세 정보를 조회합니다."""
+    """빈 강의실 상세 정보를 조회합니다.
+
+    빈 강의실 상세 정보를 조회하여 캐로셀 형태로 반환합니다.
+
+    ## 카카오 챗봇 연결 정보
+    ---
+    - 동작방식: 버튼 연결
+
+    - OpenBuilder:
+        - 블럭: "빈 강의실 상세 정보"
+        - 스킬: "빈 강의실 상세 정보"
+
+    - Params:
+        - client_extra:
+            - empty_classroom_info: 빈 강의실 정보 (예시로 제공됨)
+    ---
+
+    Returns:
+        JSONResponse: 빈 강의실 상세 정보가 담긴 JSON 응답
+    """
     logger.info("빈 강의실 상세 정보 조회 called")
     carousel = make_empty_classroom_detail_component(
         info=payload.action.client_extra.get("empty_classroom_info")

@@ -1,3 +1,4 @@
+"""강의실 관련 유틸리티 모듈입니다."""
 from collections.abc import Sequence
 import json
 import re
@@ -27,6 +28,7 @@ from app.utils.kakao import KakaoError, parse_payload
 
 
 def parse_floor(room: str) -> int | None:
+    """강의실 이름에서 층수를 추출합니다."""
     # 대강당은 1층으로 처리
     if room == "대강당":
         return 1
@@ -42,7 +44,14 @@ def parse_floor(room: str) -> int | None:
 def make_empty_classroom_component(
     empty_classrooms: EmptyClassroomInfo,
 ) -> ItemCardComponent:
-    """빈 강의실 목록을 카카오톡 챗봇의 카드 형식으로 변환합니다."""
+    """빈 강의실 목록을 카카오톡 챗봇의 카드 형식으로 변환합니다.
+
+    Args:
+        empty_classrooms (EmptyClassroomInfo): 빈 강의실 정보
+
+    Returns:
+        ItemCardComponent: 빈 강의실 정보가 담긴 카드 컴포넌트
+    """
     if not empty_classrooms.empty_classrooms:
         raise ValueError(f"{empty_classrooms.building}에 빈 강의실이 없습니다.")
     classrooms_by_floor: dict[int, List[Classroom]] = {}
@@ -58,10 +67,9 @@ def make_empty_classroom_component(
     empty_classrooms.empty_classrooms_by_floor = dict(
         sorted(
             classrooms_by_floor.items(),
-            key=lambda x: x[0]  # int 기준 정렬
+            key=lambda x: x[0],  # int 기준 정렬
         )
     )
-
 
     items: list[Item] = []
     for floor, classrooms in sorted(classrooms_by_floor.items()):
@@ -85,7 +93,7 @@ def make_empty_classroom_component(
         block_id=BlockID.CLASSROOM_DETAIL,
         extra={
             "empty_classroom_info": empty_classrooms.model_dump(),
-        }
+        },
     )
     return card
 
@@ -93,12 +101,19 @@ def make_empty_classroom_component(
 def make_empty_classroom_components(
     empty_list: List[EmptyClassroomInfo],
 ) -> List[ItemCardComponent] | List[CarouselComponent] | List[SimpleTextComponent]:
-    """빈 강의실 목록을 캐러셀 형식으로 변환합니다.
+    """빈 강의실 목록을 케로셀 형식으로 변환합니다.
 
     - 1개: 단일 카드
     - 2~10개: 하나의 Carousel
     - 11개 이상: 여러 Carousel
     - 없음: 안내 텍스트
+
+    Args:
+        empty_list (List[EmptyClassroomInfo]): 빈 강의실 정보 리스트
+
+    Returns:
+        List[ItemCardComponent] | List[CarouselComponent] | List[SimpleTextComponent]:
+            빈 강의실 정보가 담긴 카드 또는 케로셀 컴포넌트 리스트
     """
     if not empty_list:
         return [SimpleTextComponent(text="빈 강의실 정보가 없습니다.")]
@@ -144,7 +159,14 @@ def make_empty_classroom_components(
 def make_empty_classroom_detail_component(
     info: str,
 ) -> CarouselComponent:
-    """빈 강의실 상세 정보를 카드 형식으로 변환합니다."""
+    """빈 강의실 상세 정보를 카드 형식으로 변환합니다.
+
+    Args:
+        info (str): 빈 강의실 정보 JSON 문자열
+
+    Returns:
+        CarouselComponent: 빈 강의실 상세 정보가 담긴 케로셀 컴포넌트
+    """
     empty_classrooms = EmptyClassroomInfo.model_validate(info)
     if not empty_classrooms.empty_classrooms_by_floor:
         raise KakaoError(f"{empty_classrooms.building}에 빈 강의실이 없습니다.")
@@ -152,14 +174,12 @@ def make_empty_classroom_detail_component(
     # key를 int로 변환해서 정렬
     sorted_floors = sorted(
         ((int(k), v) for k, v in empty_classrooms.empty_classrooms_by_floor.items()),
-        key=lambda x: x[0]
+        key=lambda x: x[0],
     )
 
     carousel = CarouselComponent()
     for floor, classrooms in sorted_floors:
-        description = "\n".join(
-            f"{classroom.room_name}" for classroom in classrooms
-        )
+        description = "\n".join(f"{classroom.room_name}" for classroom in classrooms)
         card = TextCardComponent(
             title=f"{empty_classrooms.building} {floor}층",
             description=description,
