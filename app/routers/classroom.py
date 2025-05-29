@@ -1,6 +1,7 @@
 """빈 강의실 조회 API"""
 
 import asyncio
+import re
 from typing import Annotated
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
@@ -151,8 +152,15 @@ async def empty_classroom_by_period(
             ).get_dict()
         )
     day: str = day_param.value
-    start_period: str = start_period_param.value
-    end_period: str = end_period_param.value
+
+    start_period_str = start_period_param.value.rstrip("교시")
+    end_period_str = end_period_param.value.rstrip("교시")
+
+    start_period_match = re.match(r"\d+", start_period_str)
+    end_period_match = re.match(r"\d+", end_period_str)
+
+    start_period: int = int(start_period_match.group())
+    end_period: int = int(end_period_match.group())
     logger.info(
         f"교시 기준 빈 강의실 조회 called with day={day},"
         f"start_period={start_period},"
