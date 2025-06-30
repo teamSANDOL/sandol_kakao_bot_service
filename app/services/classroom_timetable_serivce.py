@@ -1,6 +1,5 @@
 """빈 강의실을 조회하는 서비스 모듈"""
 
-import json
 from typing import List, Literal
 from datetime import datetime, timedelta
 
@@ -34,7 +33,7 @@ async def search_empty_classroom_by_time(
         f"search_empty_classroom_by_time called with day={day}, start_time={start_time}, end_time={end_time}"
     )
     response = await client.get(
-        f"{Config.CLASSTROOM_TIMETABLE_SERVICE_URL}/classrooms/available/time",
+        f"{Config.CLASSROOM_TIMETABLE_SERVICE_URL}/classrooms/available/time",
         params={
             "day": day,
             "start_time": start_time,
@@ -71,7 +70,7 @@ async def search_empty_classroom_by_period(
         f"search_empty_classroom_by_period called with day={day}, start_period={start_period}, end_period={end_period}"
     )
     response = await client.get(
-        f"{Config.CLASSTROOM_TIMETABLE_SERVICE_URL}/classrooms/available/periods",
+        f"{Config.CLASSROOM_TIMETABLE_SERVICE_URL}/classrooms/available/periods",
         params={
             "day": day,
             "start_time": str(start_period),

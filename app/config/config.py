@@ -57,8 +57,8 @@ class Config:
     NOTICE_SERVICE_URL = os.getenv(
         "NOTICE_SERVICE_URL", "http://notice-notification:8081/notice-notification"
     ).rstrip("/")
-    CLASSTROOM_TIMETABLE_SERVICE_URL = os.getenv(
-        "CLASSTROOM_TIMETABLE_SERVICE_URL",
+    CLASSROOM_TIMETABLE_SERVICE_URL = os.getenv(
+        "CLASSROOM_TIMETABLE_SERVICE_URL",
         "http://classroom-timetable-service:80/classroom-timetable",
     ).rstrip("/")
 
