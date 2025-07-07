@@ -34,7 +34,7 @@ from app.services.meal_service import (
     post_meal,
 )
 from app.utils.auth_client import get_xuser_client_by_payload
-from app.utils.user import get_current_user
+from app.utils.user import get_current_user, sync_required
 from app.utils.http import XUserIDClient
 from app.utils import create_openapi_extra
 from app.utils.kakao import parse_payload
@@ -285,6 +285,7 @@ async def meal_restaurant(
         },
     ),
 )
+@sync_required()
 async def meal_delete(
     meal_type: str,
     payload: Annotated[Payload, Depends(parse_payload)],
@@ -376,6 +377,7 @@ async def meal_delete(
         },
     ),
 )
+@sync_required()
 async def meal_delete_all(
     payload: Annotated[Payload, Depends(parse_payload)],
     user: Annotated[User, Depends(get_current_user)],
@@ -438,6 +440,7 @@ async def meal_delete_all(
         },
     ),
 )
+@sync_required()
 async def meal_menu_delete(
     payload: Annotated[Payload, Depends(parse_payload)],
     user: Annotated[User, Depends(get_current_user)],
@@ -557,6 +560,7 @@ async def meal_menu_delete(
         },
     ),
 )
+@sync_required()
 async def meal_register(
     meal_type: Literal["lunch", "dinner"],
     payload: Annotated[Payload, Depends(parse_payload)],
@@ -704,6 +708,7 @@ async def meal_register(
         },
     ),
 )
+@sync_required()
 async def meal_submit(
     payload: Annotated[Payload, Depends(parse_payload)],
     client: Annotated[XUserIDClient, Depends(get_xuser_client_by_payload)],
