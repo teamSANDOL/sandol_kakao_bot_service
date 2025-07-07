@@ -4,18 +4,26 @@
 사용자 권한을 확인하는 기능도 포함되어 있습니다.
 """
 
+from functools import wraps
 from typing import Annotated, AsyncGenerator, Optional
-from fastapi import Depends, HTTPException, Header
+from fastapi import Depends, HTTPException, Header, Request
+from fastapi.responses import JSONResponse
 from httpx import AsyncClient
 from kakao_chatbot import Payload
+from kakao_chatbot.response import KakaoResponse, ActionEnum
+from kakao_chatbot.response.components import (
+    TextCardComponent,
+)
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config.config import Config, logger
+
+from app.database import AsyncSessionLocal
+from app.config import Config, logger, BlockID
 from app.models.users import User
 from app.schemas.users import UserSchema
 from app.utils.db import get_db
-from app.utils.kakao import KakaoError, parse_payload
+from app.utils.kakao import KakaoError, parse_payload, get_ids_from_payload
 from app.utils.http import XUserIDClient
 
 
@@ -36,15 +44,36 @@ async def get_async_client(
         yield client
 
 
-async def get_or_create_user(
+async def get_service_async_client() -> AsyncGenerator[XUserIDClient, None]:
+    """서비스 계정용 비동기 HTTP 클라이언트를 생성하고 반환합니다.
+
+    서비스 계정의 사용자 ID를 XUserIDClient에 설정하여 반환합니다.
+
+    Returns:
+        AsyncGenerator[XUserIDClient, None]: 서비스 계정용 비동기 HTTP 클라이언트
+    """
+    async with XUserIDClient(user_id=int(Config.SERVICE_ID)) as client:
+        yield client
+
+
+async def search_user(
     kakao_id: str,
     db: AsyncSession,
     plusfriend_user_key: str | None = None,
     app_user_id: str | None = None,
-) -> User:
-    """사용자를 ID 우선순위에 따라 검색하고 없으면 새로 생성합니다.
+) -> Optional[User]:
+    """사용자를 ID 우선순위에 따라 검색합니다.
 
     우선순위: 1. plusfriend_user_key → 2. app_user_id → 3. kakao_id
+
+    Args:
+        kakao_id (str): 카카오 ID
+        db (AsyncSession): 비동기 데이터베이스 세션
+        plusfriend_user_key (str | None): 플러스친구 사용자 키
+        app_user_id (str | None): 앱 사용자 ID
+
+    Returns:
+        Optional[User]: 검색된 사용자 객체 또는 None
     """
     user = None
 
@@ -65,6 +94,49 @@ async def get_or_create_user(
         result = await db.execute(select(User).where(User.kakao_id == kakao_id))
         user = result.scalar_one_or_none()
 
+    return user
+
+
+async def update_user_ids(
+    user: User,
+    db: AsyncSession,
+    kakao_id: str,
+    plusfriend_user_key: str | None = None,
+    app_user_id: str | None = None,
+):
+    # 사용자 정보 자동 수정
+    if (
+        user.kakao_id != kakao_id
+        or user.plusfriend_user_key != plusfriend_user_key
+        or user.app_user_id != app_user_id
+    ):
+        user.kakao_id = kakao_id
+        if plusfriend_user_key:
+            user.plusfriend_user_key = plusfriend_user_key
+        if app_user_id:
+            user.app_user_id = app_user_id
+        await db.commit()
+        await db.refresh(user)
+    return user
+
+
+async def get_and_update_user(
+    kakao_id: str,
+    db: AsyncSession,
+    plusfriend_user_key: str | None = None,
+    app_user_id: str | None = None,
+) -> User:
+    """사용자를 ID 우선순위에 따라 검색하고 없으면 새로 생성합니다.
+
+    우선순위: 1. plusfriend_user_key → 2. app_user_id → 3. kakao_id
+    """
+    user = await search_user(
+        kakao_id,
+        db,
+        plusfriend_user_key=plusfriend_user_key,
+        app_user_id=app_user_id,
+    )
+
     # 없으면 새로 생성
     if not user:
         if plusfriend_user_key == "":
@@ -80,19 +152,13 @@ async def get_or_create_user(
         await db.commit()
         await db.refresh(user)
 
-    # 사용자 정보 자동 수정
-    if (
-        user.kakao_id != kakao_id
-        or user.plusfriend_user_key != plusfriend_user_key
-        or user.app_user_id != app_user_id
-    ):
-        user.kakao_id = kakao_id
-        if plusfriend_user_key:
-            user.plusfriend_user_key = plusfriend_user_key
-        if app_user_id:
-            user.app_user_id = app_user_id
-        await db.commit()
-        await db.refresh(user)
+    user = await update_user_ids(
+        user,
+        db,
+        kakao_id=kakao_id,
+        plusfriend_user_key=plusfriend_user_key,
+        app_user_id=app_user_id,
+    )
     return user
 
 
@@ -110,14 +176,8 @@ async def get_current_user(
     Raises:
         HTTPException: 사용자 정보 조회 실패 시
     """
-    kakao_id = payload.user_request.user.id
-    if not payload.user_request.user.properties:
-        plusfriend_user_key = None
-        app_user_id = None
-    else:
-        plusfriend_user_key = payload.user_request.user.properties.plusfriend_user_key
-        app_user_id = payload.user_request.user.properties.app_user_id
-    return await get_or_create_user(
+    kakao_id, plusfriend_user_key, app_user_id = get_ids_from_payload(payload)
+    return await get_and_update_user(
         kakao_id,
         db,
         plusfriend_user_key=plusfriend_user_key,
@@ -298,3 +358,55 @@ async def get_admin_user_by_header(
     user = await get_current_user_by_header(db, x_user_id)
     await check_admin_user(user, client)
     return user
+
+
+def sync_required():
+    """계정을 동기화하였는지 확인하는 데코레이터"""
+
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            # payload도 여기서 파싱
+            request = kwargs.get("request") or next(
+                (a for a in args if isinstance(a, Request)), None
+            )
+            if request is None:
+                raise RuntimeError("Request 객체가 필요합니다.")
+
+            payload = await parse_payload(request)
+
+            async with AsyncSessionLocal() as db:
+                kakao_id, plusfriend_user_key, app_user_id = get_ids_from_payload(
+                    payload
+                )
+                user = await get_and_update_user(
+                    kakao_id,
+                    db,
+                    plusfriend_user_key=plusfriend_user_key,
+                    app_user_id=app_user_id,
+                )
+            if not user:
+                response = KakaoResponse()
+                card = TextCardComponent(
+                    title="계정 동기화 필요",
+                    description="계정이 동기화되지 않았습니다. 먼저 계정을 동기화해주세요.",
+                )
+                card.add_button(
+                    label="계정 동기화 하러 가기",
+                    action=ActionEnum.BLOCK,
+                    block_id=BlockID.LOGIN,
+                )
+                # card.add_button(
+                #     label="회원가입",
+                #     action=ActionEnum.WEBLINK,
+                #     web_link_url=f"{Config.USER_SERVICE_URL}/register?plusfriend_user_key={plusfriend_user_key}&app_user_id={app_user_id}",
+                # )
+                response.add_component(card)
+                return JSONResponse(response.get_dict())
+
+            # payload와 user를 kwargs로 주입
+            return await func(*args, payload=payload, user=user, **kwargs)
+
+        return wrapper
+
+    return decorator

@@ -47,6 +47,27 @@ async def parse_payload(request: Request) -> Payload:
     return Payload.from_dict(data_dict)
 
 
+def get_ids_from_payload(
+    payload: Payload,
+) -> tuple[str, str | None, str | None]:
+    """Payload로부터 kakao_id, plusfriend_user_key, app_user_id를 추출합니다.
+
+    Args:
+        payload (Payload): 요청 페이로드
+
+    Returns:
+        tuple[str, str | None, str | None]: kakao_id, plusfriend_user_key, app_user_id
+    """
+    kakao_id = payload.user_request.user.id
+    if not payload.user_request.user.properties:
+        plusfriend_user_key = None
+        app_user_id = None
+    else:
+        plusfriend_user_key = payload.user_request.user.properties.plusfriend_user_key
+        app_user_id = payload.user_request.user.properties.app_user_id
+    return kakao_id, plusfriend_user_key, app_user_id
+
+
 def error_message(message: str | BaseException) -> TextCardComponent:
     """에러 메시지를 반환합니다.
 
