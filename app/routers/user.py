@@ -11,14 +11,48 @@ from httpx import AsyncClient
 from sqlalchemy import or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
+from kakao_chatbot import Payload
 
 from app.config.config import Config
 from app.models.users import User
 from app.schemas.users import UserCreate, UserRead
+from app.utils import parse_payload
 from app.utils.db import get_db
-from app.utils.user import get_user_info, get_async_client
+from app.utils.kakao import KakaoError, get_ids_from_payload
+from app.utils.user import get_and_update_user, get_user_info, get_async_client, get_service_async_client
 
 user_router = APIRouter(prefix="/users", tags=["User"])
+
+
+@user_router.post("/login")
+async def login_user(
+    payload: Annotated[Payload, Depends(parse_payload)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    service_client: Annotated[AsyncClient, Depends(get_service_async_client)],
+):
+    """Login a user."""
+    user_info = await parse_payload(payload)
+    kakao_id, plusfriend_user_key, app_user_id = get_ids_from_payload(payload)
+    user = await get_and_update_user(
+        kakao_id,
+        db,
+        plusfriend_user_key=plusfriend_user_key,
+        app_user_id=app_user_id,
+    )
+    if user:
+        raise KakaoError(
+            f"User with kakao_id {kakao_id} already exists.",
+        )
+    pass  # TODO: Implement user login logic
+
+@user_router.post("/", response_model=UserRead)
+async def create_user(
+    user_in: UserCreate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    client: Annotated[AsyncClient, Depends(get_async_client)],
+async def login_user(
+    payload: 
+)
 
 
 @user_router.post("/", response_model=UserRead)
