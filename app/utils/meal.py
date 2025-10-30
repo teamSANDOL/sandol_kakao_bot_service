@@ -334,7 +334,7 @@ async def get_my_restaurants(
     Returns:
         list[RestaurantResponse]: 사용자의 식당 정보 리스트
     """
-    return await fetch_my_restaurants(user.id, client)
+    return await fetch_my_restaurants(user.keycloak_sub, client)
 
 
 async def select_restaurant(

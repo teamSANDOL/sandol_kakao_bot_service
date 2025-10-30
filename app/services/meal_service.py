@@ -79,22 +79,22 @@ async def fetch_restaurant_by_name(
 
 
 async def fetch_my_restaurants(
-    user_id: int,
+    user_sub: str,
     client: XUserIDClient,
 ) -> List[RestaurantResponse]:
     """사용자가 관리자 또는 소유자로 등록된 식당들을 조회합니다.
 
     Args:
-        user_id (int): 사용자 ID
-        client (XUserIDClient): HTTP 클라이언트 인스턴스
+        user_sub (str): Keycloak 사용자 `sub`.
+        client (XUserIDClient): HTTP 클라이언트 인스턴스.
 
     Returns:
-        List[RestaurantResponse]: 사용자가 관련된 식당 정보 리스트
+        List[RestaurantResponse]: 사용자가 관련된 식당 정보 리스트.
     """
-    logger.info(f"Fetching restaurants for user_id: {user_id}")
+    logger.info("Fetching restaurants for user_sub: %s", user_sub)
     params_list = [
-        {"owner_id": user_id, "size": 100},
-        {"manager_id": user_id, "size": 100},
+        {"owner_sub": user_sub, "size": 100},
+        {"manager_sub": user_sub, "size": 100},
     ]
     restaurants = []
 

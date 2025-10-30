@@ -1,31 +1,75 @@
-"""이 모듈은 사용자 정보를 저장하는 User 클래스를 정의합니다."""
+"""카카오 사용자 정보와 Keycloak 사용자 정보 및 토큰을 매핑하는 테이블 모델 정의."""
+import datetime
 
+from sqlalchemy import (
+    Integer, String, Text, DateTime, Boolean, # Boolean 추가
+    UniqueConstraint
+)
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import Integer, Boolean, String
 
+# Base는 app/database.py 등에서 임포트해야 합니다.
 from app.database import Base
 
-
 class User(Base):
-    """사용자 정보를 저장하는 클래스
+    """카카오 사용자 정보와 Keycloak 사용자 정보 및 토큰을 매핑하는 테이블 모델.
+
+    이 클래스는 SQLAlchemy의 선언적 Base를 상속받아 `user_map` 테이블과 매핑됩니다.
+    카카오톡 챗봇 사용자의 고유 ID와 Keycloak 인증 후 발급받은 사용자 ID(`sub`),
+    그리고 Keycloak 토큰(Access Token, Refresh Token) 및 관련 정보를 저장합니다.
 
     Attributes:
-        __tablename__ (str): 데이터베이스 테이블 이름
-        id (int): 내부 고유 사용자 ID
-        kakao_id (str): 카카오톡에서 제공하는 사용자 ID
-        plusfriend_user_key (str): 플러스친구 사용자 고유키
-        app_user_id (str): OpenBuilder의 사용자 ID (앱 전용)
-        kakao_admin (bool): 카카오 관리자 여부
+        id (int): 레코드의 고유 기본 키 (자동 증가).
+        keycloak_sub (str): Keycloak 사용자의 고유 식별자 ('sub' 클레임). 고유해야 함.
+        kakao_id (str): 카카오톡 사용자의 고유 ID (payload.user_id). 고유해야 함.
+        plusfriend_user_key (str | None): 카카오톡 플러스친구 사용자 키 (선택 사항). 고유해야 함.
+        app_user_id (str | None): 카카오톡 OpenBuilder 앱 사용자 ID (선택 사항). 고유해야 함.
+        access_token (str | None): 암호화된 Keycloak Access Token (JWT).
+        refresh_token (str | None): 암호화된 Keycloak Refresh Token.
+        access_token_expires_at (datetime.datetime | None): Access Token의 만료 시각 (시간대 포함).
+        refresh_token_expires_at (datetime.datetime | None): Refresh Token의 만료 시각 (시간대 포함).
+        kakao_admin (bool): 해당 카카오 사용자가 서비스 내 관리자 권한을 가졌는지 여부.
     """
-
-    __tablename__ = "User"
+    __tablename__ = "user"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    kakao_id: Mapped[str] = mapped_column(
-        String(64), unique=True, nullable=False
-    )  # payload.user_id와 대응
-    plusfriend_user_key: Mapped[str] = mapped_column(
+    keycloak_sub: Mapped[str] = mapped_column(
+        String(64), unique=True, index=True, nullable=False
+    )
+    kakao_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    plusfriend_user_key: Mapped[str | None] = mapped_column(
         String(64), unique=True, nullable=True
     )
-    app_user_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=True)
-    kakao_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    access_token: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    ) # 암호화된 토큰 저장
+    refresh_token: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    ) # 암호화된 토큰 저장
+    access_token_expires_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    refresh_token_expires_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # --- User 모델에서 가져온 필드 ---
+    app_user_id: Mapped[str | None] = mapped_column( # Nullable로 변경 (User 모델 참조)
+        String(64), unique=True, nullable=True
+    )
+    kakao_admin: Mapped[bool] = mapped_column( # User 모델 참조
+        Boolean, nullable=False, default=False
+    )
+
+    # --- 테이블 제약 조건 ---
+    __table_args__ = (
+        UniqueConstraint("keycloak_sub", name="uq_keycloak_sub"),
+        # 필요 시 다른 Unique Constraint 추가 가능 (예: kakao_id, app_user_id 등)
+        # UniqueConstraint("kakao_id", name="uq_kakao_id"),
+        # UniqueConstraint("app_user_id", name="uq_app_user_id"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<User(id={self.id}, kakao_id='{self.kakao_id}', "
+            f"keycloak_sub='{self.keycloak_sub}')>"
+        )
