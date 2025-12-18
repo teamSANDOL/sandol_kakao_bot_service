@@ -9,12 +9,19 @@ from fastapi.responses import JSONResponse  # noqa: F401
 from kakao_chatbot import Payload
 from kakao_chatbot.response import KakaoResponse
 from kakao_chatbot.response.components import SimpleTextComponent
+from sqladmin import Admin
 import uvicorn
 
-from app.routers import meal_router, user_router, statics_router, notice_router, classroom_router
+from app.models.admin import UserAdmin
+from app.routers import (
+    meal_router,
+    user_router,
+    statics_router,
+    notice_router,
+    classroom_router,
+)
 from app.config import Config, logger
-from app.database import init_db
-from app.utils.lifespan import set_service_account
+from app.database import init_db, async_engine
 from app.utils import error_message, parse_payload
 from app.utils.kakao import KakaoError
 
@@ -37,7 +44,7 @@ async def lifespan(app: FastAPI):
     await init_db()
 
     # 서버 시작 시 서비스 계정 설정 실행
-    await set_service_account()
+    # await set_service_account()
 
     yield  # FastAPI가 실행 중인 동안 유지됨
 
@@ -51,6 +58,9 @@ app.include_router(user_router)
 app.include_router(statics_router)
 app.include_router(notice_router)
 app.include_router(classroom_router)
+
+admin = Admin(app=app, engine=async_engine)
+admin.add_view(UserAdmin)
 
 
 @app.exception_handler(Exception)

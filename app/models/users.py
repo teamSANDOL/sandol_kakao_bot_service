@@ -1,14 +1,20 @@
 """카카오 사용자 정보와 Keycloak 사용자 정보 및 토큰을 매핑하는 테이블 모델 정의."""
+
 import datetime
 
 from sqlalchemy import (
-    Integer, String, Text, DateTime, Boolean, # Boolean 추가
-    UniqueConstraint
+    Integer,
+    String,
+    Text,
+    DateTime,
+    Boolean,  # Boolean 추가
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
 # Base는 app/database.py 등에서 임포트해야 합니다.
 from app.database import Base
+
 
 class User(Base):
     """카카오 사용자 정보와 Keycloak 사용자 정보 및 토큰을 매핑하는 테이블 모델.
@@ -29,22 +35,21 @@ class User(Base):
         refresh_token_expires_at (datetime.datetime | None): Refresh Token의 만료 시각 (시간대 포함).
         kakao_admin (bool): 해당 카카오 사용자가 서비스 내 관리자 권한을 가졌는지 여부.
     """
+
     __tablename__ = "user"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     keycloak_sub: Mapped[str] = mapped_column(
         String(64), unique=True, index=True, nullable=False
     )
-    kakao_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    kakao_id: Mapped[str] = mapped_column(
+        String(64), index=True, unique=True, nullable=False
+    )
     plusfriend_user_key: Mapped[str | None] = mapped_column(
         String(64), unique=True, nullable=True
     )
-    access_token: Mapped[str | None] = mapped_column(
-        Text, nullable=True
-    ) # 암호화된 토큰 저장
-    refresh_token: Mapped[str | None] = mapped_column(
-        Text, nullable=True
-    ) # 암호화된 토큰 저장
+    access_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True)
     access_token_expires_at: Mapped[datetime.datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -53,10 +58,10 @@ class User(Base):
     )
 
     # --- User 모델에서 가져온 필드 ---
-    app_user_id: Mapped[str | None] = mapped_column( # Nullable로 변경 (User 모델 참조)
+    app_user_id: Mapped[str | None] = mapped_column(  # Nullable로 변경 (User 모델 참조)
         String(64), unique=True, nullable=True
     )
-    kakao_admin: Mapped[bool] = mapped_column( # User 모델 참조
+    kakao_admin: Mapped[bool] = mapped_column(  # User 모델 참조
         Boolean, nullable=False, default=False
     )
 
@@ -64,12 +69,15 @@ class User(Base):
     __table_args__ = (
         UniqueConstraint("keycloak_sub", name="uq_keycloak_sub"),
         # 필요 시 다른 Unique Constraint 추가 가능 (예: kakao_id, app_user_id 등)
-        # UniqueConstraint("kakao_id", name="uq_kakao_id"),
-        # UniqueConstraint("app_user_id", name="uq_app_user_id"),
+        UniqueConstraint("kakao_id", name="uq_kakao_id"),
+        UniqueConstraint("app_user_id", name="uq_app_user_id"),
     )
 
     def __repr__(self) -> str:
         return (
             f"<User(id={self.id}, kakao_id='{self.kakao_id}', "
-            f"keycloak_sub='{self.keycloak_sub}')>"
+            f"keycloak_sub='{self.keycloak_sub}', "
+            f"app_user_id='{self.app_user_id}', "
+            f"plusfriend_user_key='{self.plusfriend_user_key}', "
+            f"kakao_admin={self.kakao_admin})>"
         )
