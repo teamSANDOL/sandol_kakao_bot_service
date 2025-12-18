@@ -1,14 +1,14 @@
 import traceback
+from typing import Optional
 
 from fastapi import Request
 from kakao_chatbot import Payload
-from kakao_chatbot.response import KakaoResponse
+from kakao_chatbot.response import KakaoResponse, ActionEnum
 from kakao_chatbot.response.components import TextCardComponent, SimpleTextComponent
 
-from app.config.config import Config
+from app.config import Config, BlockID
 
 
-# custom Exception
 class KakaoError(Exception):
     """카카오톡 관련 에러를 나타내는 사용자 정의 예외 클래스입니다.
 
@@ -35,6 +35,60 @@ class KakaoError(Exception):
         if isinstance(self.message, KakaoResponse):
             return self.message
         return KakaoResponse().add_component(SimpleTextComponent(self.message))
+
+
+class NotAuthorizedError(Exception):
+    """사용자 로그인(등록) 과정이 진행되지 않아 발생하는 에러입니다."""
+
+    def __init__(self, *args, **kwargs):
+        """Initializes the NotAuthorizedError instance."""
+        super().__init__(*args, **kwargs)
+
+    def get_response(self) -> KakaoResponse:
+        """로그인 유도 메시지를 포함한 KakaoResponse 객체를 반환합니다."""
+        response = KakaoResponse()
+        card = TextCardComponent(
+            title="로그인 필요",
+            description=(
+                "해당 서비스 이용을 위해 로그인이 필요합니다. 아래 버튼을 눌러 로그인해주세요."
+            ),
+        )
+        card.add_button(
+            "로그인하기",
+            action=ActionEnum.BLOCK,
+            block_id=BlockID.LOGIN,
+        )
+        response.add_component(card)
+        return response
+
+
+class LoginRequiredError(Exception):
+    """사용자 인증이 필요한 경우 발생하는 에러입니다."""
+
+    def __init__(self, *args, message: Optional[str] = None, **kwargs):
+        """Initializes the LoginRequiredError instance."""
+        super().__init__(*args[1:], **kwargs)
+        self.message = message
+
+    def get_response(self) -> KakaoResponse:
+        """로그인 유도 메시지를 포함한 KakaoResponse 객체를 반환합니다."""
+        description = (
+            self.message
+            if self.message
+            else "사용자 인증 과정 중에 문제가 발생했습니다. 아래 버튼을 눌러 다시 로그인해주세요."
+        )
+        response = KakaoResponse()
+        card = TextCardComponent(
+            title="로그인 필요",
+            description=description,
+        )
+        card.add_button(
+            "로그인하기",
+            action=ActionEnum.BLOCK,
+            block_id=BlockID.LOGIN,
+        )
+        response.add_component(card)
+        return response
 
 
 async def parse_payload(request: Request) -> Payload:

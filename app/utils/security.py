@@ -29,9 +29,14 @@ def decrypt_token(encrypted_token: str) -> str:
 
         return fernet.decrypt(encrypted_token.encode("utf-8")).decode("utf-8")
     except InvalidToken:
-        logger.warning("decrypt_token: 토큰 복호화 실패 - 변조되었거나 유효하지 않은 토큰입니다.")
+        logger.warning(
+            "decrypt_token: 토큰 복호화 실패 - 변조되었거나 유효하지 않은 토큰입니다."
+        )
         raise ValueError("Invalid or tampered token")
     except Exception as exc:
-        logger.exception("decrypt_token: 토큰 복호화 중 예기치 못한 오류가 발생했습니다.")
+        logger.error(
+            "decrypt_token: 토큰 복호화 중 예기치 못한 오류가 발생했습니다.",
+            exc_info=True,
+        )
         # 내부 예외를 보존하여 호출자가 원인 파악 가능하도록 합니다.
         raise RuntimeError("Decryption failed") from exc
