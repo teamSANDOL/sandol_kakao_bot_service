@@ -68,7 +68,9 @@ class Config:
         "CLASSROOM_TIMETABLE_SERVICE_URL",
         "http://classroom-timetable-service:80/classroom-timetable",
     ).rstrip("/")
-    AUTH_RELAY_URL = os.getenv("AUTH_RELAY_URL", "http://auth-relay/relay").rstrip("/")
+    AUTH_RELAY_URL = os.getenv("AUTH_RELAY_URL", "http://auth-relay/relay").rstrip(
+        "/"
+    )
     LOGIN_CALLBACK_URL = os.getenv("LOGIN_CALLBACK_URL", f"{BASE_URL}/users/callback")
     LOGIN_REDIRECT_AFTER = os.getenv("LOGIN_REDIRECT_AFTER")
 
