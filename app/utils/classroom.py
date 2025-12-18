@@ -1,16 +1,9 @@
 """강의실 관련 유틸리티 모듈입니다."""
-from collections.abc import Sequence
-import json
+
 import re
 import string
-from datetime import datetime
-from typing import Annotated, List, Optional, overload
+from typing import List
 
-from fastapi import Depends
-from fastapi.responses import JSONResponse
-from kakao_chatbot import Payload
-from kakao_chatbot.context import Context, ContextParam
-from kakao_chatbot.response import KakaoResponse
 from kakao_chatbot.response.components import (
     ItemCardComponent,
     Item,
@@ -21,10 +14,7 @@ from kakao_chatbot.response.components import (
 
 from app.config import BlockID, logger
 from app.schemas.classroom import EmptyClassroomInfo, Classroom
-from app.utils import get_korean_day
-from app.utils.user import get_current_user
-from app.utils.http import XUserIDClient
-from app.utils.kakao import KakaoError, parse_payload
+from app.utils.kakao import KakaoError
 
 
 def parse_floor(room: str) -> int | None:

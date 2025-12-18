@@ -1,12 +1,14 @@
 from typing import List, Optional
 
+from httpx import AsyncClient
+
 from app.config import Config, logger
 from app.schemas.meals import MealType, MealResponse, RestaurantResponse
 from app.utils.http import XUserIDClient
 
 
 async def fetch_latest_meals(
-    client: XUserIDClient,
+    client: AsyncClient,
     restaurant_id: Optional[int] = None,
 ) -> List[MealResponse]:
     """식사 정보를 가져오는 함수
@@ -35,7 +37,7 @@ async def fetch_latest_meals(
 
 
 async def fetch_restaurants(
-    client: XUserIDClient,
+    client: AsyncClient,
     restaurant_id: Optional[int] = None,
 ) -> List[RestaurantResponse]:
     """식당 정보를 가져오는 함수
@@ -65,7 +67,7 @@ async def fetch_restaurants(
 
 async def fetch_restaurant_by_name(
     name: str,
-    client: XUserIDClient,
+    client: AsyncClient,
 ) -> Optional[RestaurantResponse]:
     """식당 이름으로 식당을 검색하여 반환합니다 (부분 일치)."""
     response = await client.get(

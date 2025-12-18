@@ -20,9 +20,8 @@ from app.config.blocks import get_cafeteria_register_quick_replies
 from app.models.users import User
 from app.schemas.meals import MealCard, RestaurantResponse, TimeRange
 from app.services.meal_service import fetch_my_restaurants
+from app.services.user_service import get_current_user, get_xuser_client_by_payload
 from app.utils import get_korean_day
-from app.utils.auth_client import get_xuser_client_by_payload
-from app.utils.user import get_current_user
 from app.utils.http import XUserIDClient
 from app.utils.kakao import KakaoError, parse_payload
 

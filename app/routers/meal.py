@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from fastapi import Depends, APIRouter
 from fastapi.responses import JSONResponse
 
-from httpx import HTTPStatusError
+from httpx import AsyncClient, HTTPStatusError
 from kakao_chatbot import Payload
 from kakao_chatbot.context import Context
 from kakao_chatbot.response import KakaoResponse, QuickReply, ActionEnum
@@ -33,9 +33,8 @@ from app.services.meal_service import (
     fetch_restaurant_by_name,
     post_meal,
 )
-from app.utils.auth_client import get_xuser_client_by_payload
-from app.utils.user import get_current_user
-from app.utils.http import XUserIDClient
+from app.services.user_service import get_xuser_client_by_payload, get_current_user
+from app.utils.http import XUserIDClient, get_async_client
 from app.utils import create_openapi_extra
 from app.utils.kakao import parse_payload
 from app.utils.meal import (
@@ -67,7 +66,7 @@ meal_router = APIRouter(prefix="/meal")
 )
 async def meal_view(
     payload: Annotated[Payload, Depends(parse_payload)],
-    client: Annotated[XUserIDClient, Depends(get_xuser_client_by_payload)],
+    client: Annotated[AsyncClient, Depends(get_async_client)],
 ) -> JSONResponse:
     """식단 정보를 Carousel TextCard 형태로 반환합니다.
 
@@ -202,7 +201,7 @@ async def meal_view(
 async def meal_restaurant(
     payload: Annotated[Payload, Depends(parse_payload)],
     user: Annotated[User, Depends(get_current_user)],
-    client: Annotated[XUserIDClient, Depends(get_xuser_client_by_payload)],
+    client: Annotated[AsyncClient, Depends(get_async_client)],
 ) -> JSONResponse:
     """식당 정보를 반환하는 API입니다.
 
@@ -706,8 +705,8 @@ async def meal_register(
 )
 async def meal_submit(
     payload: Annotated[Payload, Depends(parse_payload)],
-    client: Annotated[XUserIDClient, Depends(get_xuser_client_by_payload)],
     user: Annotated[User, Depends(get_current_user)],
+    client: Annotated[XUserIDClient, Depends(get_xuser_client_by_payload)],
     restaurant: Annotated[
         RestaurantResponse,
         Depends(select_restaurant),

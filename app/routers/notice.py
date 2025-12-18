@@ -7,6 +7,7 @@ import asyncio
 from typing import Annotated
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
+from httpx import AsyncClient
 from kakao_chatbot import Payload
 from kakao_chatbot.response import (
     KakaoResponse,
@@ -23,8 +24,7 @@ from app.services.notice_service import (
     get_notice_list,
 )
 from app.utils import create_openapi_extra
-from app.utils.auth_client import get_service_xuser_client
-from app.utils.http import XUserIDClient
+from app.utils.http import get_async_client
 from app.utils.kakao import parse_payload
 from app.utils.notice import make_notice_component
 
@@ -45,7 +45,7 @@ notice_router = APIRouter(prefix="/notice")
 )
 async def notice_list(
     payload: Annotated[Payload, Depends(parse_payload)],
-    client: Annotated[XUserIDClient, Depends(get_service_xuser_client)],
+    client: Annotated[AsyncClient, Depends(get_async_client)],
 ):
     """공지사항 목록을 가져옵니다.
 

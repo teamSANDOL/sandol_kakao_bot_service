@@ -5,13 +5,14 @@
 
 from typing import List, Optional
 
+from httpx import AsyncClient
+
 from app.config import Config, logger
 from app.schemas.notice import NoticeResponse, Notice
-from app.utils.http import XUserIDClient
 
 
 async def get_notice_list(
-    client: XUserIDClient,
+    client: AsyncClient,
     page: Optional[int] = 1,
     page_size: Optional[int] = 20,
     raise_on_error: bool = False,
@@ -45,7 +46,7 @@ async def get_notice_list(
 
 
 async def get_dorm_notice_list(
-    client: XUserIDClient,
+    client: AsyncClient,
     page: Optional[int] = 1,
     page_size: Optional[int] = 20,
     raise_on_error: bool = False,
@@ -75,7 +76,7 @@ async def get_dorm_notice_list(
 
 
 async def get_notice_by_author(
-    client: XUserIDClient,
+    client: AsyncClient,
     author: str,
     size: int = 20,
     search_page_size: int = 50,

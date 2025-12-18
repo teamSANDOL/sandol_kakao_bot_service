@@ -2,11 +2,13 @@
 
 자주 변경되지 않는 정적 정보를 제공하는 API를 구현합니다.
 """
+
 from typing import Annotated
 
 from fastapi import Depends
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
+from httpx import AsyncClient
 from kakao_chatbot import Payload
 from kakao_chatbot.response import (
     KakaoResponse,
@@ -21,8 +23,7 @@ from app.services.static_service import (
     fetch_shuttle_img_inks,
     search_organization,
 )
-from app.utils.auth_client import get_service_xuser_client
-from app.utils.http import XUserIDClient
+from app.utils.http import get_async_client
 from app.utils.kakao import parse_payload
 from app.utils.openapi import create_openapi_extra
 from app.utils.statics import (
@@ -48,7 +49,7 @@ statics_router = APIRouter(prefix="/statics")
 )
 async def info(
     payload: Annotated[Payload, Depends(parse_payload)],
-    client: Annotated[XUserIDClient, Depends(get_service_xuser_client)],
+    client: Annotated[AsyncClient, Depends(get_async_client)],
 ):
     """학교 조직정보를 반환합니다.
 
@@ -131,7 +132,7 @@ async def unit_info(payload: Annotated[Payload, Depends(parse_payload)]):
     ),
 )
 async def shuttle_info(
-    client: Annotated[XUserIDClient, Depends(get_service_xuser_client)],
+    client: Annotated[AsyncClient, Depends(get_async_client)],
 ):
     """셔틀버스 정보를 반환합니다.
 

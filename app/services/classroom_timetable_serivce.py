@@ -3,17 +3,16 @@
 from typing import List, Literal
 from datetime import datetime, timedelta
 
+from httpx import AsyncClient
 from pydantic import TypeAdapter
 
 from app.config import Config, logger
 from app.schemas.classroom import EmptyClassroomInfo
 from app.utils import get_korean_day
 
-from app.utils.http import XUserIDClient
-
 
 async def search_empty_classroom_by_time(
-    client: XUserIDClient,
+    client: AsyncClient,
     day: Literal["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"],
     start_time: str,
     end_time: str,
@@ -21,7 +20,7 @@ async def search_empty_classroom_by_time(
     """빈 강의실을 조회하는 함수
 
     Args:
-        client (XUserIDClient): HTTP 클라이언트 인스턴스
+        client (AsyncClient): HTTP 클라이언트 인스턴스
         day (Literal): 요일 (예: "월요일", "화요일" 등)
         start_time (str): 시작 시간 (예: "09:00")
         end_time (str): 종료 시간 (예: "10:00")
@@ -50,7 +49,7 @@ async def search_empty_classroom_by_time(
 
 
 async def search_empty_classroom_by_period(
-    client: XUserIDClient,
+    client: AsyncClient,
     day: Literal["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"],
     start_period: int,
     end_period: int,
@@ -58,7 +57,7 @@ async def search_empty_classroom_by_period(
     """빈 강의실을 조회하는 함수 (교시 단위)
 
     Args:
-        client (XUserIDClient): HTTP 클라이언트 인스턴스
+        client (AsyncClient): HTTP 클라이언트 인스턴스
         day (Literal): 요일 (예: "월요일", "화요일" 등)
         start_period (int): 시작 교시 (1부터 시작)
         end_period (int): 종료 교시 (1부터 시작)
@@ -87,12 +86,12 @@ async def search_empty_classroom_by_period(
 
 
 async def search_empty_classroom_now(
-    client: XUserIDClient,
+    client: AsyncClient,
 ):
     """현재 빈 강의실을 조회하는 함수
 
     Args:
-        client (XUserIDClient): HTTP 클라이언트 인스턴스
+        client (AsyncClient): HTTP 클라이언트 인스턴스
 
     Returns:
         list[EmptyClassroomInfo]: 현재 빈 강의실 정보 리스트

@@ -1,12 +1,11 @@
 """빈 강의실 조회 API"""
 
-import asyncio
 import re
 from typing import Annotated
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
+from httpx import AsyncClient
 from kakao_chatbot import Payload
-from kakao_chatbot.input import Param
 from kakao_chatbot.response import (
     KakaoResponse,
 )
@@ -15,15 +14,14 @@ from kakao_chatbot.response.components import (
 )
 
 from app.config import logger
-from app.schemas.classroom import Classroom, EmptyClassroomInfo
+from app.schemas.classroom import EmptyClassroomInfo
 from app.services.classroom_timetable_serivce import (
     search_empty_classroom_by_time,
     search_empty_classroom_by_period,
     search_empty_classroom_now,
 )
 from app.utils import create_openapi_extra
-from app.utils.auth_client import get_service_xuser_client
-from app.utils.http import XUserIDClient
+from app.utils.http import get_async_client
 from app.utils.kakao import parse_payload
 from app.utils.classroom import (
     make_empty_classroom_components,
@@ -54,7 +52,7 @@ classroom_router = APIRouter(prefix="/classroom")
 )
 async def empty_classroom_by_time(
     payload: Annotated[Payload, Depends(parse_payload)],
-    client: Annotated[XUserIDClient, Depends(get_service_xuser_client)],
+    client: Annotated[AsyncClient, Depends(get_async_client)],
 ):
     """빈 강의실을 시간 기준으로 조회합니다.
 
@@ -117,7 +115,7 @@ async def empty_classroom_by_time(
     ),
 )
 async def empty_classroom_now(
-    client: Annotated[XUserIDClient, Depends(get_service_xuser_client)],
+    client: Annotated[AsyncClient, Depends(get_async_client)],
 ):
     """현재 빈 강의실을 조회합니다.
 
@@ -167,7 +165,7 @@ async def empty_classroom_now(
 )
 async def empty_classroom_by_period(
     payload: Annotated[Payload, Depends(parse_payload)],
-    client: Annotated[XUserIDClient, Depends(get_service_xuser_client)],
+    client: Annotated[AsyncClient, Depends(get_async_client)],
 ):
     """빈 강의실을 교시 기준으로 조회합니다.
 
