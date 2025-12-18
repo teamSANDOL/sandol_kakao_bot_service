@@ -21,6 +21,7 @@ dependencies = [
     "python-keycloak>=5.8.1",
     "cryptography>=46.0.3",
     "pyjwt>=2.10.1",
+    "sqladmin>=0.21.0",
 ]
 
 [dependency-groups]
