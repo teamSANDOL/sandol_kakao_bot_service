@@ -25,7 +25,7 @@ class User(Base):
 
     Attributes:
         id (int): 레코드의 고유 기본 키 (자동 증가).
-        keycloak_sub (str): Keycloak 사용자의 고유 식별자 ('sub' 클레임). 고유해야 함.
+        keycloak_id (str): Keycloak 사용자의 고유 식별자 ('id' 클레임). 고유해야 함.
         kakao_id (str): 카카오톡 사용자의 고유 ID (payload.user_id). 고유해야 함.
         plusfriend_user_key (str | None): 카카오톡 플러스친구 사용자 키 (선택 사항). 고유해야 함.
         app_user_id (str | None): 카카오톡 OpenBuilder 앱 사용자 ID (선택 사항). 고유해야 함.
@@ -39,7 +39,7 @@ class User(Base):
     __tablename__ = "user"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    keycloak_sub: Mapped[str] = mapped_column(
+    keycloak_id: Mapped[str] = mapped_column(
         String(64), unique=True, index=True, nullable=False
     )
     kakao_id: Mapped[str] = mapped_column(
@@ -67,7 +67,7 @@ class User(Base):
 
     # --- 테이블 제약 조건 ---
     __table_args__ = (
-        UniqueConstraint("keycloak_sub", name="uq_keycloak_sub"),
+        UniqueConstraint("keycloak_id", name="uq_keycloak_id"),
         # 필요 시 다른 Unique Constraint 추가 가능 (예: kakao_id, app_user_id 등)
         UniqueConstraint("kakao_id", name="uq_kakao_id"),
         UniqueConstraint("app_user_id", name="uq_app_user_id"),
@@ -76,7 +76,7 @@ class User(Base):
     def __repr__(self) -> str:
         return (
             f"<User(id={self.id}, kakao_id='{self.kakao_id}', "
-            f"keycloak_sub='{self.keycloak_sub}', "
+            f"keycloak_id='{self.keycloak_id}', "
             f"app_user_id='{self.app_user_id}', "
             f"plusfriend_user_key='{self.plusfriend_user_key}', "
             f"kakao_admin={self.kakao_admin})>"

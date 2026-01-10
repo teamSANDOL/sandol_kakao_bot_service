@@ -333,7 +333,7 @@ async def get_my_restaurants(
     Returns:
         list[RestaurantResponse]: 사용자의 식당 정보 리스트
     """
-    return await fetch_my_restaurants(user.keycloak_sub, client)
+    return await fetch_my_restaurants(user.keycloak_id, client)
 
 
 async def select_restaurant(

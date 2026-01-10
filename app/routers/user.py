@@ -130,7 +130,7 @@ async def login_callback(
             "kakao_id: %s <-> keycloak_sub: %s",
             user_map.id,
             user_map.kakao_id,
-            user_map.keycloak_sub,
+            user_map.keycloak_id,
         )
 
         # --- 5. 성공 응답 반환 ---

@@ -10,13 +10,13 @@ class XUserIDClient(AsyncClient):
     """Keycloak 사용자 정보를 헤더에 포함하여 요청을 전송하는 비동기 HTTP 클라이언트입니다.
 
     Args:
-        user_sub (str | None): 요청 헤더에 포함할 Keycloak `sub` 값.
+        user_id (str | None): 요청 헤더에 포함할 Keycloak `id` 값.
         access_token (str | None): `Authorization` 헤더에 넣을 액세스 토큰.
         token_type (str): `Authorization` 헤더에 사용할 토큰 유형.
         extra_headers (Mapping[str, str] | None): 매 요청에 추가할 기타 정적 헤더.
 
     Attributes:
-        user_sub (str | None): 요청 헤더에 포함될 Keycloak `sub`.
+        user_id (str | None): 요청 헤더에 포함될 Keycloak `id`.
         access_token (str | None): `Authorization` 헤더에 포함될 토큰.
         token_type (str): 토큰 유형(기본값: `Bearer`).
         extra_headers (dict[str, str]): 추가 헤더 모음.
@@ -24,7 +24,7 @@ class XUserIDClient(AsyncClient):
 
     def __init__(
         self,
-        user_sub: str | None,
+        user_id: str | None,
         *,
         access_token: str | None = None,
         token_type: str = "Bearer",
@@ -32,7 +32,7 @@ class XUserIDClient(AsyncClient):
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
-        self.user_sub = user_sub
+        self.user_id = user_id
         self.access_token = access_token
         self.token_type = token_type
         self.extra_headers = dict(extra_headers or {})
@@ -47,8 +47,8 @@ class XUserIDClient(AsyncClient):
         Returns:
             httpx.Response: HTTP 응답 객체.
         """
-        if self.user_sub:
-            request.headers.setdefault("X-User-Sub", self.user_sub)
+        if self.user_id:
+            request.headers.setdefault("X-User-ID", self.user_id)
         if self.access_token:
             request.headers.setdefault(
                 "Authorization", f"{self.token_type} {self.access_token}"

@@ -55,7 +55,7 @@ async def _perform_token_refresh(user: User, db: AsyncSession) -> str:
     )
     if not user.refresh_token or not user.refresh_token_expires_at:
         logger.warning(
-            "No refresh token available for keycloak_sub=%s", user.keycloak_sub
+            "No refresh token available for keycloak_sub=%s", user.keycloak_id
         )
         raise LoginRequiredError(message='인증 정보를 찾을 수 없습니다. 아래 로그인 버튼 또는 "로그인"을 입력해 다시 로그인해주세요.')
 
@@ -64,7 +64,7 @@ async def _perform_token_refresh(user: User, db: AsyncSession) -> str:
     if refresh_expires_at <= now_utc:
         logger.warning(
             "Refresh token expired for keycloak_sub=%s (expired_at=%s, now=%s)",
-            user.keycloak_sub,
+            user.keycloak_id,
             refresh_expires_at.isoformat(),
             now_utc.isoformat(),
         )
@@ -75,7 +75,7 @@ async def _perform_token_refresh(user: User, db: AsyncSession) -> str:
     except (ValueError, RuntimeError) as exc:
         logger.error(
             "Failed to decrypt refresh token for keycloak_sub=%s: %s",
-            user.keycloak_sub,
+            user.keycloak_id,
             exc,
             exc_info=True,
         )
@@ -84,7 +84,7 @@ async def _perform_token_refresh(user: User, db: AsyncSession) -> str:
             ) from exc
 
     token_response = await request_token_refresh(
-        decrypted_refresh_token, keycloak_sub=user.keycloak_sub
+        decrypted_refresh_token, keycloak_sub=user.keycloak_id
     )
 
     try:
@@ -100,7 +100,7 @@ async def _perform_token_refresh(user: User, db: AsyncSession) -> str:
 
         await db.commit()
         await db.refresh(user)
-        logger.info("Token refresh successful for keycloak_sub=%s", user.keycloak_sub)
+        logger.info("Token refresh successful for keycloak_sub=%s", user.keycloak_id)
         return user.access_token
     except (KeyError, ValueError, RuntimeError) as exc:
         await db.rollback()
@@ -116,8 +116,8 @@ async def _perform_token_refresh(user: User, db: AsyncSession) -> str:
 
 
 async def resolve_keycloak_context(user: User, db: AsyncSession) -> tuple[str, str]:
-    """사용자 엔티티에 저장된 Keycloak sub와 액세스 토큰을 반환합니다."""
-    if not user.keycloak_sub:
+    """사용자 엔티티에 저장된 Keycloak id와 액세스 토큰을 반환합니다."""
+    if not user.keycloak_id:
         raise HTTPException(
             status_code=Config.HttpStatus.UNAUTHORIZED,
             detail="Keycloak 로그인이 완료되지 않았습니다. 먼저 로그인해주세요.",
@@ -144,22 +144,22 @@ async def resolve_keycloak_context(user: User, db: AsyncSession) -> tuple[str, s
     except RuntimeError as exc:
         logger.exception(
             "Unexpected error while decrypting access token for keycloak_sub=%s",
-            user.keycloak_sub,
+            user.keycloak_id,
         )
         raise HTTPException(
             status_code=Config.HttpStatus.INTERNAL_SERVER_ERROR,
             detail="토큰 복호화 중 오류가 발생했습니다.",
         ) from exc
 
-    return user.keycloak_sub, decrypted_access_token
+    return user.keycloak_id, decrypted_access_token
 
 
-async def get_keycloak_sub_by_kakao_id(
+async def get_keycloak_id_by_kakao_id(
     db: AsyncSession, kakao_user_id: str
 ) -> str | None:
-    """Kakao User ID로 Keycloak Sub ID를 조회합니다."""
+    """Kakao User ID로 Keycloak ID를 조회합니다."""
     result = await db.execute(
-        select(User.keycloak_sub).where(User.kakao_id == kakao_user_id)
+        select(User.keycloak_id).where(User.kakao_id == kakao_user_id)
     )
     return result.scalar_one_or_none()
 
@@ -264,16 +264,16 @@ async def get_current_user(
 
 async def get_current_user_by_header(
     db: Annotated[AsyncSession, Depends(get_db)],
-    x_user_sub: str | None = Header(None, alias="X-User-Sub"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ) -> User:
-    """X-User-Sub 헤더 값으로 사용자를 조회합니다."""
-    if not x_user_sub:
+    """X-User-ID 헤더 값으로 사용자를 조회합니다."""
+    if not x_user_id:
         raise HTTPException(
             status_code=Config.HttpStatus.UNAUTHORIZED,
-            detail="X-User-Sub 헤더가 필요합니다.",
+            detail="X-User-ID 헤더가 필요합니다.",
         )
 
-    result = await db.execute(select(User).where(User.keycloak_sub == x_user_sub))
+    result = await db.execute(select(User).where(User.keycloak_id == x_user_id))
     user = result.scalar_one_or_none()
 
     if user is None:
@@ -291,10 +291,10 @@ async def get_xuser_client_by_payload(
 ) -> AsyncGenerator[XUserIDClient, None]:
     """카카오 Payload 기반으로 Keycloak 컨텍스트를 설정한 HTTP 클라이언트를 생성합니다."""
     user = await get_current_user(payload, db)
-    user_sub, access_token = await resolve_keycloak_context(user, db)
-    logger.debug("Provide XUserIDClient for keycloak_sub=%s", user_sub)
+    user_id, access_token = await resolve_keycloak_context(user, db)
+    logger.debug("Provide XUserIDClient for keycloak_sub=%s", user_id)
     async with XUserIDClient(
-        user_sub=user_sub,
+        user_id=user_id,
         access_token=access_token,
     ) as client:
         yield client
@@ -387,11 +387,11 @@ async def get_admin_user(
 
 async def get_admin_user_by_header(
     db: Annotated[AsyncSession, Depends(get_db)],
-    x_user_sub: str | None = Header(None, alias="X-User-Sub"),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ) -> User:
     """헤더 기반으로 관리자 여부를 확인합니다."""
-    user = await get_current_user_by_header(db, x_user_sub)
-    user_sub, access_token = await resolve_keycloak_context(user, db)
-    async with XUserIDClient(user_sub, access_token=access_token) as client:
+    user = await get_current_user_by_header(db, x_user_id)
+    user_id, access_token = await resolve_keycloak_context(user, db)
+    async with XUserIDClient(user_id=user_id, access_token=access_token) as client:
         await check_admin_user(user, client, kakao_request=False)
     return user

@@ -230,7 +230,7 @@ def _kakao_identity_matches(
 async def map_keycloak_user(
     db: AsyncSession,
     kakao_id: str,
-    keycloak_sub: str,
+    keycloak_sub: str,  # OIDC/JWT의 sub (경계에서만 sub라고 부름)
     decrypted_access_token: str,
     decrypted_refresh_token: str,
     expires_in: int,
@@ -245,7 +245,7 @@ async def map_keycloak_user(
     try:
         async with db.begin():
             # 후보 조회: sub / kakao_id / (있으면) plusfriend_user_key
-            conds = [User.keycloak_sub == keycloak_sub, User.kakao_id == kakao_id]
+            conds = [User.keycloak_id == keycloak_sub, User.kakao_id == kakao_id]
             if plusfriend_user_key:
                 conds.append(User.plusfriend_user_key == plusfriend_user_key)
 
@@ -253,7 +253,7 @@ async def map_keycloak_user(
             result = await db.execute(stmt)
             rows = list(result.scalars().all())
 
-            user_by_sub = next((u for u in rows if u.keycloak_sub == keycloak_sub), None)
+            user_by_keycloak = next((u for u in rows if u.keycloak_id == keycloak_sub), None)
 
             # "카카오 측 매칭"은 plusfriend_user_key 우선으로 잡는다(있으면)
             user_by_pf = (
@@ -269,8 +269,8 @@ async def map_keycloak_user(
             user_by_kakao_identity = user_by_pf or user_by_kakao
 
             # 케이스 1) 둘 다 같은 레코드로 매칭 (정상)
-            if user_by_sub and user_by_kakao_identity and user_by_sub.id == user_by_kakao_identity.id:
-                u = user_by_sub
+            if user_by_keycloak and user_by_kakao_identity and user_by_keycloak.id == user_by_kakao_identity.id:
+                u = user_by_keycloak
                 u.access_token = encrypted_access_token
                 u.refresh_token = encrypted_refresh_token
                 u.access_token_expires_at = access_expires_at
@@ -283,8 +283,8 @@ async def map_keycloak_user(
                 return u
 
             # 케이스 2) keycloak_sub는 있는데, "카카오 사용자"가 불일치
-            if user_by_sub and not _kakao_identity_matches(
-                db_user=user_by_sub,
+            if user_by_keycloak and not _kakao_identity_matches(
+                db_user=user_by_keycloak,
                 kakao_id=kakao_id,
                 plusfriend_user_key=plusfriend_user_key,
             ):
@@ -294,7 +294,7 @@ async def map_keycloak_user(
                 )
 
             # 케이스 3) 카카오 사용자는 있는데, keycloak_sub가 불일치
-            if user_by_kakao_identity and user_by_kakao_identity.keycloak_sub != keycloak_sub:
+            if user_by_kakao_identity and user_by_kakao_identity.keycloak_id != keycloak_sub:
                 # 여기서도 ‘카카오 사용자’ 자체는 이미 user_by_kakao_identity로 결정된 상태
                 raise HTTPException(
                     status_code=409,
@@ -302,10 +302,10 @@ async def map_keycloak_user(
                 )
 
             # 케이스 4) 한쪽만 존재: 충돌이 아니라면 같은 사용자로 보고 붙여서 갱신
-            u = user_by_sub or user_by_kakao_identity
+            u = user_by_keycloak or user_by_kakao_identity
             if u:
                 # (추가 안전장치) 혹시라도 sub가 있는데 카카오 불일치면 위에서 이미 차단됨
-                u.keycloak_sub = keycloak_sub
+                u.keycloak_id = keycloak_sub
                 u.kakao_id = kakao_id
                 u.plusfriend_user_key = plusfriend_user_key
                 u.access_token = encrypted_access_token
@@ -318,7 +318,7 @@ async def map_keycloak_user(
 
             # 케이스 5) 완전 신규
             new_user = User(
-                keycloak_sub=keycloak_sub,
+                keycloak_id=keycloak_sub,
                 kakao_id=kakao_id,
                 plusfriend_user_key=plusfriend_user_key,
                 app_user_id=None,

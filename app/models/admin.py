@@ -9,21 +9,21 @@ class UserAdmin(ModelView, model=User):
 
     column_list = [
         User.id,
-        User.keycloak_sub,
+        User.keycloak_id,
         User.kakao_id,
         User.plusfriend_user_key,
         User.app_user_id,
         User.kakao_admin,
     ]
     column_searchable_list = [
-        User.keycloak_sub,
+        User.keycloak_id,
         User.kakao_id,
         User.app_user_id,
         User.plusfriend_user_key,
     ]
     column_sortable_list = [
         User.id,
-        User.keycloak_sub,
+        User.keycloak_id,
         User.kakao_id,
         User.plusfriend_user_key,
         User.app_user_id,
