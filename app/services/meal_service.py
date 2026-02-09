@@ -81,35 +81,36 @@ async def fetch_restaurant_by_name(
 
 
 async def fetch_my_restaurants(
-    user_sub: str,
+    user_id: str,
     client: XUserIDClient,
 ) -> List[RestaurantResponse]:
     """사용자가 관리자 또는 소유자로 등록된 식당들을 조회합니다.
 
     Args:
-        user_sub (str): Keycloak 사용자 `sub`.
+        user_id (str): Keycloak 사용자 `id`.
         client (XUserIDClient): HTTP 클라이언트 인스턴스.
 
     Returns:
         List[RestaurantResponse]: 사용자가 관련된 식당 정보 리스트.
     """
-    logger.info("Fetching restaurants for user_sub: %s", user_sub)
-    params_list = [
-        {"owner_sub": user_sub, "size": 100},
-        {"manager_sub": user_sub, "size": 100},
+    logger.info("Fetching restaurants for user_id: %s", user_id)
+    params_list: list[dict[str, str]] = [
+        {"owner_user_id": user_id},
+        {"manager_user_id": user_id},
     ]
     restaurants = []
 
     for params in params_list:
         response = await client.get(
-            f"{Config.MEAL_SERVICE_URL}/restaurants/", params=params
+            f"{Config.MEAL_SERVICE_URL}/restaurants/", params=params,
         )
         response.raise_for_status()
         data = response.json().get("data", [])
+        logger.info("Fetched %d restaurants with data %s", len(data), data)
         restaurants.extend(data)
-
-    logger.debug(f"Fetched restaurants: {restaurants}")
-    return [RestaurantResponse.model_validate(item) for item in restaurants]
+    response = [RestaurantResponse.model_validate(item) for item in restaurants]
+    logger.debug(f"Fetched restaurants response: {response}")
+    return response
 
 
 async def post_meal(

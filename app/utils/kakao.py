@@ -6,7 +6,7 @@ from kakao_chatbot import Payload
 from kakao_chatbot.response import KakaoResponse, ActionEnum
 from kakao_chatbot.response.components import TextCardComponent, SimpleTextComponent
 
-from app.config import Config, BlockID
+from app.config import Config, BlockID, logger
 
 
 class KakaoError(Exception):
@@ -97,6 +97,7 @@ async def parse_payload(request: Request) -> Payload:
     Request에서 JSON 데이터를 추출하여 Payload 객체로 변환합니다.
     FastAPI의 Dependency Injection을 사용하기 위한 함수입니다.
     """
+    logger.debug("사용자 요청\n%s", await request.body())
     data_dict = await request.json()
     return Payload.from_dict(data_dict)
 

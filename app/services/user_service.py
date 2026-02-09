@@ -26,7 +26,12 @@ from app.services.auth_service import (
 )
 from app.utils.db import get_db
 from app.utils.http import XUserIDClient
-from app.utils.kakao import KakaoError, LoginRequiredError, NotAuthorizedError, parse_payload
+from app.utils.kakao import (
+    KakaoError,
+    LoginRequiredError,
+    NotAuthorizedError,
+    parse_payload,
+)
 from app.utils.security import decrypt_token, encrypt_token
 
 
@@ -57,7 +62,9 @@ async def _perform_token_refresh(user: User, db: AsyncSession) -> str:
         logger.warning(
             "No refresh token available for keycloak_sub=%s", user.keycloak_id
         )
-        raise LoginRequiredError(message='인증 정보를 찾을 수 없습니다. 아래 로그인 버튼 또는 "로그인"을 입력해 다시 로그인해주세요.')
+        raise LoginRequiredError(
+            message='인증 정보를 찾을 수 없습니다. 아래 로그인 버튼 또는 "로그인"을 입력해 다시 로그인해주세요.'
+        )
 
     refresh_expires_at = _normalize_to_utc(user.refresh_token_expires_at)
     now_utc = datetime.now(timezone.utc)
@@ -68,7 +75,9 @@ async def _perform_token_refresh(user: User, db: AsyncSession) -> str:
             refresh_expires_at.isoformat(),
             now_utc.isoformat(),
         )
-        raise LoginRequiredError(message='로그인 인증 기간이 만료되었습니다. 아래 로그인 버튼 또는 "로그인"을 입력해 다시 로그인해주세요.')
+        raise LoginRequiredError(
+            message='로그인 인증 기간이 만료되었습니다. 아래 로그인 버튼 또는 "로그인"을 입력해 다시 로그인해주세요.'
+        )
 
     try:
         decrypted_refresh_token = decrypt_token(user.refresh_token)
@@ -81,7 +90,7 @@ async def _perform_token_refresh(user: User, db: AsyncSession) -> str:
         )
         raise LoginRequiredError(
             message='토큰 정보가 유효하지 않습니다. 아래 로그인 버튼 또는 "로그인"을 입력해 다시 로그인해주세요.'
-            ) from exc
+        ) from exc
 
     token_response = await request_token_refresh(
         decrypted_refresh_token, keycloak_sub=user.keycloak_id
@@ -132,24 +141,42 @@ async def resolve_keycloak_context(user: User, db: AsyncSession) -> tuple[str, s
     now_with_buffer = datetime.now(timezone.utc) + timedelta(seconds=60)
 
     if expires_at <= now_with_buffer:
-        decrypted_access_token = await _perform_token_refresh(user, db)
-
-    try:
-        decrypted_access_token = decrypt_token(user.access_token)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=Config.HttpStatus.UNAUTHORIZED,
-            detail="토큰 정보가 유효하지 않습니다. 다시 로그인해주세요.",
-        ) from exc
-    except RuntimeError as exc:
-        logger.exception(
-            "Unexpected error while decrypting access token for keycloak_sub=%s",
-            user.keycloak_id,
-        )
-        raise HTTPException(
-            status_code=Config.HttpStatus.INTERNAL_SERVER_ERROR,
-            detail="토큰 복호화 중 오류가 발생했습니다.",
-        ) from exc
+        # 토큰 만료 → 갱신 후 갱신된 암호화 토큰을 복호화하여 반환
+        encrypted_access_token = await _perform_token_refresh(user, db)
+        try:
+            decrypted_access_token = decrypt_token(encrypted_access_token)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=Config.HttpStatus.UNAUTHORIZED,
+                detail="갱신된 토큰 정보가 유효하지 않습니다. 다시 로그인해주세요.",
+            ) from exc
+        except RuntimeError as exc:
+            logger.exception(
+                "Unexpected error while decrypting refreshed access token for keycloak_sub=%s",
+                user.keycloak_id,
+            )
+            raise HTTPException(
+                status_code=Config.HttpStatus.INTERNAL_SERVER_ERROR,
+                detail="토큰 복호화 중 오류가 발생했습니다.",
+            ) from exc
+    else:
+        # 토큰 유효 → 기존 토큰 복호화
+        try:
+            decrypted_access_token = decrypt_token(user.access_token)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=Config.HttpStatus.UNAUTHORIZED,
+                detail="토큰 정보가 유효하지 않습니다. 다시 로그인해주세요.",
+            ) from exc
+        except RuntimeError as exc:
+            logger.exception(
+                "Unexpected error while decrypting access token for keycloak_sub=%s",
+                user.keycloak_id,
+            )
+            raise HTTPException(
+                status_code=Config.HttpStatus.INTERNAL_SERVER_ERROR,
+                detail="토큰 복호화 중 오류가 발생했습니다.",
+            ) from exc
 
     return user.keycloak_id, decrypted_access_token
 
@@ -219,11 +246,14 @@ async def get_user_info(
         try:
             user_info: dict = await keycloak_client.a_userinfo(token=access_token)
         except KeycloakError:
-            logger.warning("비동기 Keycloak userinfo 호출 실패, 동기 호출로 재시도 시도", exc_info=True)
+            logger.warning(
+                "비동기 Keycloak userinfo 호출 실패, 동기 호출로 재시도 시도",
+                exc_info=True,
+            )
             user_info = keycloak_client.userinfo(token=access_token)
         return UserSchema(
             sub=keycloak_sub,
-            name=user_info.get("username", user_info.get("preferred_username","")),
+            name=user_info.get("username", user_info.get("preferred_username", "")),
             preferred_username=user_info.get("preferred_username", ""),
             email=user_info.get("email", ""),
             email_verified=user_info.get("email_verified", False),

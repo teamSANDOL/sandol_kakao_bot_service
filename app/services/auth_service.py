@@ -40,6 +40,7 @@ def get_keycloak_client() -> KeycloakOpenID:
         timeout=10,
     )
 
+
 def _canonical_json(data: dict[str, Any]) -> str:
     """HMAC 서명을 위한 정규화 JSON 문자열."""
     return json.dumps(data, separators=(",", ":"), sort_keys=True, ensure_ascii=False)
@@ -121,7 +122,14 @@ def extract_keycloak_sub(decrypted_access_token: str) -> str:
 
 
 def get_expiry_datetime(expires_in: int) -> datetime:
-    """현재 시간 기준 expires_in 초 후의 만료 시각을 계산합니다."""
+    """현재 시간 기준 expires_in 초 후의 만료 시각을 계산합니다.
+
+    Offline Token의 경우 expires_in=0으로 반환되며, 이는 무제한을 의미합니다.
+    이 경우 충분히 긴 기간(10년)을 설정합니다.
+    """
+    if expires_in == 0:
+        # Offline Token: 무제한 (10년으로 설정)
+        return datetime.now(timezone.utc) + timedelta(days=365 * 10)
     return datetime.now(timezone.utc) + timedelta(seconds=expires_in)
 
 
@@ -253,7 +261,9 @@ async def map_keycloak_user(
             result = await db.execute(stmt)
             rows = list(result.scalars().all())
 
-            user_by_keycloak = next((u for u in rows if u.keycloak_id == keycloak_sub), None)
+            user_by_keycloak = next(
+                (u for u in rows if u.keycloak_id == keycloak_sub), None
+            )
 
             # "카카오 측 매칭"은 plusfriend_user_key 우선으로 잡는다(있으면)
             user_by_pf = (
@@ -269,7 +279,11 @@ async def map_keycloak_user(
             user_by_kakao_identity = user_by_pf or user_by_kakao
 
             # 케이스 1) 둘 다 같은 레코드로 매칭 (정상)
-            if user_by_keycloak and user_by_kakao_identity and user_by_keycloak.id == user_by_kakao_identity.id:
+            if (
+                user_by_keycloak
+                and user_by_kakao_identity
+                and user_by_keycloak.id == user_by_kakao_identity.id
+            ):
                 u = user_by_keycloak
                 u.access_token = encrypted_access_token
                 u.refresh_token = encrypted_refresh_token
@@ -294,7 +308,10 @@ async def map_keycloak_user(
                 )
 
             # 케이스 3) 카카오 사용자는 있는데, keycloak_sub가 불일치
-            if user_by_kakao_identity and user_by_kakao_identity.keycloak_id != keycloak_sub:
+            if (
+                user_by_kakao_identity
+                and user_by_kakao_identity.keycloak_id != keycloak_sub
+            ):
                 # 여기서도 ‘카카오 사용자’ 자체는 이미 user_by_kakao_identity로 결정된 상태
                 raise HTTPException(
                     status_code=409,
@@ -342,7 +359,9 @@ async def map_keycloak_user(
     except HTTPException:
         raise
     except Exception as exc:  # noqa: BLE001
-        logger.error("Failed to map Keycloak user to Kakao user in DB: %s", exc, exc_info=True)
+        logger.error(
+            "Failed to map Keycloak user to Kakao user in DB: %s", exc, exc_info=True
+        )
         raise HTTPException(
             status_code=Config.HttpStatus.INTERNAL_SERVER_ERROR,
             detail="Failed to map user in database",

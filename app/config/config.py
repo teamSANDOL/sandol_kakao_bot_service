@@ -68,13 +68,13 @@ class Config:
         "CLASSROOM_TIMETABLE_SERVICE_URL",
         "http://classroom-timetable-service:80/classroom-timetable",
     ).rstrip("/")
-    AUTH_RELAY_URL = os.getenv("AUTH_RELAY_URL", "http://auth-relay/relay").rstrip(
+    AUTH_RELAY_URL = os.getenv("AUTH_RELAY_URL", "http://auth-relay:8000/relay").rstrip(
         "/"
     )
     LOGIN_CALLBACK_URL = os.getenv("LOGIN_CALLBACK_URL", f"{BASE_URL}/users/callback")
     LOGIN_REDIRECT_AFTER = os.getenv("LOGIN_REDIRECT_AFTER")
 
-    KC_SERVER_URL = os.getenv("KC_SERVER_URL", "https://sandol.sio2.kr/auth/")
+    KC_SERVER_URL = os.getenv("KC_SERVER_URL", "https://sandol.sio2.kr/auth/").rstrip("/") + "/"
     KC_CLIENT_ID = os.getenv("KC_CLIENT_ID", "sandol-kakao-bot")
     KC_REALM = os.getenv("KC_REALM", "Sandori")
     KC_CLIENT_SECRET = os.getenv("KC_CLIENT_SECRET", "your-kakao-bot-client-secret")

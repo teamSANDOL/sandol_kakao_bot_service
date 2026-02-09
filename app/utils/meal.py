@@ -376,6 +376,8 @@ async def select_restaurant(
     if len(restaurants) == 1:
         return restaurants[0]
 
+    logger.info("사용자에게 식당 선택을 요청합니다.\n식당 목록: %s", [restaurant.name for restaurant in restaurants])
+
     response = KakaoResponse()
 
     text_card = TextCardComponent(
