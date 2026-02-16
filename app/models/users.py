@@ -74,6 +74,7 @@ class User(Base):
     )
 
     def __repr__(self) -> str:
+        """디버깅용 사용자 모델 문자열 표현을 반환합니다."""
         return (
             f"<User(id={self.id}, kakao_id='{self.kakao_id}', "
             f"keycloak_id='{self.keycloak_id}', "

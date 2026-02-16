@@ -31,6 +31,7 @@ class XUserIDClient(AsyncClient):
         extra_headers: Mapping[str, str] | None = None,
         **kwargs,
     ) -> None:
+        """클라이언트를 초기화하고 헤더 주입용 컨텍스트를 저장합니다."""
         super().__init__(**kwargs)
         self.user_id = user_id
         self.access_token = access_token

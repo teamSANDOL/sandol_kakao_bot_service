@@ -9,7 +9,7 @@ from app.config import Config, logger
 
 
 class Timestamp:
-    """KST(서울 시간)으로 자동 변환되는 datetime 필드"""
+    """KST(서울 시간)으로 자동 변환되는 datetime 필드입니다."""
 
     @classmethod
     def __get_pydantic_core_schema__(cls, source_type, handler: GetCoreSchemaHandler):

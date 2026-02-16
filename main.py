@@ -28,7 +28,7 @@ from app.utils.kakao import KakaoError, LoginRequiredError, NotAuthorizedError
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """FastAPI의 lifespan 이벤트 핸들러"""
+    """FastAPI의 lifespan 이벤트 핸들러."""
     logger.info("🚀 서비스 시작: 데이터베이스 init 및 서비스 계정 설정")
     logger.debug(
         "Cofing 정보 로드 %s",

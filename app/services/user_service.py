@@ -36,7 +36,7 @@ from app.utils.security import decrypt_token, encrypt_token
 
 
 def _normalize_to_utc(dt: datetime) -> datetime:
-    """datetime 객체를 UTC 기준으로 변환합니다."""
+    """Datetime 객체를 UTC 기준으로 변환합니다."""
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)

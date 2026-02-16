@@ -1,3 +1,5 @@
+"""Kakao payload 파싱과 챗봇 에러 응답 유틸을 제공합니다."""
+
 import traceback
 from typing import Optional
 

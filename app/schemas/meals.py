@@ -1,3 +1,5 @@
+"""식단/식당 도메인 스키마를 정의합니다."""
+
 from datetime import datetime
 from enum import Enum
 from typing import Literal, Optional, Dict
@@ -5,7 +7,7 @@ from pydantic import BaseModel
 
 
 class MealType(str, Enum):
-    """식사 종류를 나타내는 Enum 클래스
+    """식사 종류를 나타내는 Enum 클래스.
 
     Attributes:
         breakfast (str): 아침 식사
@@ -21,7 +23,7 @@ class MealType(str, Enum):
 
 
 class BaseMeal(BaseModel):
-    """공통 Meal 모델
+    """공통 Meal 모델.
 
     Attributes:
         menu (list[str]): 메뉴 목록
@@ -33,14 +35,14 @@ class BaseMeal(BaseModel):
 
 
 class MealRegister(BaseMeal):
-    """식사 등록 모델
+    """식사 등록 모델.
 
     BaseMeal을 상속받아 추가적인 필드를 포함하지 않음
     """
 
 
 class MealCard(BaseMeal):
-    """카드를 위해 필요한 정보만 담은 모델
+    """카드를 위해 필요한 정보만 담은 모델.
 
     식사 등록 모델과 유사하지만, 카드에 필요한 정보만 포함
 
@@ -54,7 +56,7 @@ class MealCard(BaseMeal):
 
 
 class MealResponse(MealCard):
-    """개별 식사 응답 모델
+    """개별 식사 응답 모델.
 
     Attributes:
         id (int): 식사 ID

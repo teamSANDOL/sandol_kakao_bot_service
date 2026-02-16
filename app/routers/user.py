@@ -68,7 +68,6 @@ async def login_callback(
     x_relay_signature: str | None = Header(default=None),
 ):
     """로그인 콜백을 처리하고, 콜백에 포함된 토큰을 이용해 Keycloak 사용자 매핑을 수행합니다."""
-    
     # 암호화여부를 명시적으로 나타내기 위해 변수명 변경
     decrypted_access_token = data.relay_access_token
     decrypted_refresh_token = data.offline_refresh_token

@@ -225,7 +225,7 @@ def _kakao_identity_matches(
     kakao_id: str,
     plusfriend_user_key: str | None,
 ) -> bool:
-    """비교 규칙:
+    """비교 규칙입니다.
 
     - 입력 plusfriend_user_key와 DB plusfriend_user_key가 둘 다 있으면 그것만으로 비교한다 (kakao_id 무시)
     - 그 외에는 kakao_id로 비교한다
@@ -245,6 +245,23 @@ async def map_keycloak_user(
     refresh_expires_in: int,
     plusfriend_user_key: str | None = None,
 ) -> "User":
+    """Keycloak 계정과 카카오 사용자를 매핑하고 토큰/만료 시각을 갱신합니다.
+
+    충돌 규칙을 검증한 뒤 기존 사용자 레코드를 갱신하거나 신규 사용자를 생성합니다.
+
+    Args:
+        db (AsyncSession): 비동기 DB 세션.
+        kakao_id (str): 카카오 사용자 식별자.
+        keycloak_sub (str): Keycloak 토큰의 sub 값.
+        decrypted_access_token (str): 평문 액세스 토큰.
+        decrypted_refresh_token (str): 평문 리프레시 토큰.
+        expires_in (int): 액세스 토큰 만료까지의 초 단위 값.
+        refresh_expires_in (int): 리프레시 토큰 만료까지의 초 단위 값.
+        plusfriend_user_key (str | None): 카카오 plusfriend 식별자.
+
+    Returns:
+        User: 갱신 또는 생성된 사용자 레코드.
+    """
     encrypted_access_token = encrypt_token(decrypted_access_token)
     encrypted_refresh_token = encrypt_token(decrypted_refresh_token)
     access_expires_at = get_expiry_datetime(expires_in)

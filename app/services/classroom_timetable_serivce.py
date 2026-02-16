@@ -1,4 +1,4 @@
-"""빈 강의실을 조회하는 서비스 모듈"""
+"""빈 강의실을 조회하는 서비스 모듈."""
 
 from typing import List, Literal
 from datetime import datetime, timedelta
@@ -17,7 +17,7 @@ async def search_empty_classroom_by_time(
     start_time: str,
     end_time: str,
 ):
-    """빈 강의실을 조회하는 함수
+    """빈 강의실을 조회하는 함수.
 
     Args:
         client (AsyncClient): HTTP 클라이언트 인스턴스
@@ -54,7 +54,7 @@ async def search_empty_classroom_by_period(
     start_period: int,
     end_period: int,
 ):
-    """빈 강의실을 조회하는 함수 (교시 단위)
+    """빈 강의실을 조회하는 함수 (교시 단위).
 
     Args:
         client (AsyncClient): HTTP 클라이언트 인스턴스
@@ -88,7 +88,7 @@ async def search_empty_classroom_by_period(
 async def search_empty_classroom_now(
     client: AsyncClient,
 ):
-    """현재 빈 강의실을 조회하는 함수
+    """현재 빈 강의실을 조회하는 함수.
 
     Args:
         client (AsyncClient): HTTP 클라이언트 인스턴스

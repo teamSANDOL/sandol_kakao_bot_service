@@ -1,3 +1,5 @@
+"""식단/식당 조회 및 등록을 위한 외부 API 연동 서비스입니다."""
+
 from typing import List, Optional
 
 from httpx import AsyncClient
@@ -11,7 +13,7 @@ async def fetch_latest_meals(
     client: AsyncClient,
     restaurant_id: Optional[int] = None,
 ) -> List[MealResponse]:
-    """식사 정보를 가져오는 함수
+    """식사 정보를 가져오는 함수.
 
     Args:
         client (XUserIDClient): HTTP 클라이언트 인스턴스
@@ -40,7 +42,7 @@ async def fetch_restaurants(
     client: AsyncClient,
     restaurant_id: Optional[int] = None,
 ) -> List[RestaurantResponse]:
-    """식당 정보를 가져오는 함수
+    """식당 정보를 가져오는 함수.
 
     Args:
         client (XUserIDClient): HTTP 클라이언트 인스턴스
@@ -102,7 +104,8 @@ async def fetch_my_restaurants(
 
     for params in params_list:
         response = await client.get(
-            f"{Config.MEAL_SERVICE_URL}/restaurants/", params=params,
+            f"{Config.MEAL_SERVICE_URL}/restaurants/",
+            params=params,
         )
         response.raise_for_status()
         data = response.json().get("data", [])

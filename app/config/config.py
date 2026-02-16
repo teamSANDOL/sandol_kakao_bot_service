@@ -34,7 +34,7 @@ logger.addHandler(console_handler)
 
 
 class Config:
-    """FastAPI 설정 값을 관리하는 클래스
+    """FastAPI 설정 값을 관리하는 클래스입니다.
 
     이 클래스는 환경 변수에서 설정 값을 로드하고, 기본 값을 제공합니다.
     또한, meal_types.json 파일에서 식사 유형을 불러오는 기능도 포함되어 있습니다.
@@ -74,7 +74,9 @@ class Config:
     LOGIN_CALLBACK_URL = os.getenv("LOGIN_CALLBACK_URL", f"{BASE_URL}/users/callback")
     LOGIN_REDIRECT_AFTER = os.getenv("LOGIN_REDIRECT_AFTER")
 
-    KC_SERVER_URL = os.getenv("KC_SERVER_URL", "https://sandol.sio2.kr/auth/").rstrip("/") + "/"
+    KC_SERVER_URL = (
+        os.getenv("KC_SERVER_URL", "https://sandol.sio2.kr/auth/").rstrip("/") + "/"
+    )
     KC_CLIENT_ID = os.getenv("KC_CLIENT_ID", "sandol-kakao-bot")
     KC_REALM = os.getenv("KC_REALM", "Sandori")
     KC_CLIENT_SECRET = os.getenv("KC_CLIENT_SECRET", "your-kakao-bot-client-secret")
@@ -86,7 +88,7 @@ class Config:
     NONCE_TTL_SECONDS = int(os.getenv("NONCE_TTL_SECONDS", "300"))
 
     class HttpStatus:
-        """HTTP 상태 코드를 정의하는 클래스"""
+        """HTTP 상태 코드를 정의하는 클래스입니다."""
 
         OK = 200
         CREATED = 201

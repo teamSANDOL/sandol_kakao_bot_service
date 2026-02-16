@@ -1,4 +1,4 @@
-"""빈 강의실 조회 API"""
+"""빈 강의실 조회 API입니다."""
 
 import re
 from typing import Annotated

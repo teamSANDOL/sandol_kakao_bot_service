@@ -1,4 +1,5 @@
-# app/schemas/auth.py
+"""인증/로그인 링크 발급 및 콜백 요청 스키마를 정의합니다."""
+
 from typing import Optional
 
 from pydantic import BaseModel, HttpUrl

@@ -1,3 +1,5 @@
+"""식단 응답 조합, 컨텍스트 저장, 식당 선택 관련 유틸 함수 모음입니다."""
+
 from collections.abc import Sequence
 import json
 import re
@@ -325,7 +327,7 @@ async def get_my_restaurants(
     user: Annotated[User, Depends(get_current_user)],
     client: Annotated[XUserIDClient, Depends(get_xuser_client_by_payload)],
 ) -> list[RestaurantResponse]:
-    """DI에 의존하는 식당 정보를 가져오는 함수
+    """DI에 의존하는 식당 정보를 가져오는 함수.
 
     Args:
         user (User): 현재 사용자
@@ -376,7 +378,10 @@ async def select_restaurant(
     if len(restaurants) == 1:
         return restaurants[0]
 
-    logger.info("사용자에게 식당 선택을 요청합니다.\n식당 목록: %s", [restaurant.name for restaurant in restaurants])
+    logger.info(
+        "사용자에게 식당 선택을 요청합니다.\n식당 목록: %s",
+        [restaurant.name for restaurant in restaurants],
+    )
 
     response = KakaoResponse()
 

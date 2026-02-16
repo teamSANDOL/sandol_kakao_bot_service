@@ -11,7 +11,7 @@ def get_datetime_by_string(time_str: str) -> datetime:
 
 
 def get_string_by_datetime(time: datetime) -> str:
-    """datetime 객체를 "HH:MM" 형식의 문자열로 변환합니다."""
+    """Datetime 객체를 "HH:MM" 형식의 문자열로 변환합니다."""
     return time.strftime("%H:%M")
 
 

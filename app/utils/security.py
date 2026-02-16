@@ -1,4 +1,5 @@
-# app/utils/security.py
+"""토큰 암복호화 보안 유틸리티를 제공합니다."""
+
 import os
 from cryptography.fernet import Fernet
 from app.config import logger
