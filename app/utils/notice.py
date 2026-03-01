@@ -2,6 +2,7 @@
 
 카카오톡 챗봇에서 공지사항을 보여주기 위해서는 리스트 카드 또는 캐러셀 형식으로 변환해야 합니다.
 """
+from kakao_chatbot.response.base import ParentComponent
 from kakao_chatbot.response.components import (
     ListCardComponent,
     ListItem,
@@ -42,7 +43,7 @@ def make_notice_component(
     notice_list: list[Notice],
     is_author: bool = False,
     is_dormitory: bool = False,
-) -> SimpleTextComponent | ListCardComponent | CarouselComponent:
+) -> ParentComponent:
     """공지사항 목록을 리스트 카드 또는 캐러셀로 변환합니다.
 
     공지사항이 5개 이하인 경우 리스트 카드로 반환하고,
@@ -56,7 +57,7 @@ def make_notice_component(
         is_author (bool): 작성자 조회 여부
         is_dormitory (bool): 기숙사 조회 여부
     Returns:
-        SimpleTextComponent | ListCardComponent | CarouselComponent: 공지사항 목록
+        ParentComponent: 공지사항 목록
     """
     if is_author and is_dormitory:
         logger.warning("is_author and is_dormitory both True")
