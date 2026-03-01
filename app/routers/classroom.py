@@ -3,7 +3,6 @@
 import re
 from typing import Annotated
 from fastapi import APIRouter, Depends
-from fastapi.responses import JSONResponse
 from httpx import AsyncClient
 from kakao_chatbot import Payload
 from kakao_chatbot.response import (
@@ -14,7 +13,6 @@ from kakao_chatbot.response.components import (
 )
 
 from app.config import logger
-from app.schemas.classroom import EmptyClassroomInfo
 from app.services.classroom_timetable_serivce import (
     search_empty_classroom_by_time,
     search_empty_classroom_by_period,
@@ -22,10 +20,11 @@ from app.services.classroom_timetable_serivce import (
 )
 from app.utils import create_openapi_extra
 from app.utils.http import get_async_client
-from app.utils.kakao import parse_payload
+from app.utils.kakao import parse_payload, extract_text_value
 from app.utils.classroom import (
     make_empty_classroom_components,
     make_empty_classroom_detail_component,
+    parse_day_name,
 )
 
 classroom_router = APIRouter(prefix="/classroom")
@@ -80,18 +79,24 @@ async def empty_classroom_by_time(
     start_time_param = payload.action.detail_params.get("start_time")
     end_time_param = payload.action.detail_params.get("end_time")
     if not day_param or not start_time_param or not end_time_param:
-        return JSONResponse(
-            KakaoResponse(
-                component_list=[
-                    SimpleTextComponent(
-                        text="빈 강의실 조회에 필요한 파라미터가 부족합니다."
-                    )
-                ]
-            ).get_dict()
-        )
-    day = day_param.value
-    start_time = start_time_param.value
-    end_time = end_time_param.value
+        return KakaoResponse(
+            component_list=[
+                SimpleTextComponent(
+                    text="빈 강의실 조회에 필요한 파라미터가 부족합니다."
+                )
+            ]
+        ).get_dict()
+    day = parse_day_name(day_param.value)
+    start_time = extract_text_value(start_time_param.value)
+    end_time = extract_text_value(end_time_param.value)
+    if day is None or start_time is None or end_time is None:
+        return KakaoResponse(
+            component_list=[
+                SimpleTextComponent(
+                    text="빈 강의실 조회 파라미터 형식이 올바르지 않습니다."
+                )
+            ]
+        ).get_dict()
 
     logger.info(
         f"시간 기준 빈 강의실 조회 called with day={day},"
@@ -105,7 +110,7 @@ async def empty_classroom_by_time(
 
     components = make_empty_classroom_components(empty_classrooms)
 
-    return JSONResponse(KakaoResponse(component_list=components).get_dict())
+    return KakaoResponse(component_list=components).get_dict()
 
 
 @classroom_router.post(
@@ -141,7 +146,7 @@ async def empty_classroom_now(
 
     components = make_empty_classroom_components(empty_classrooms)
 
-    return JSONResponse(KakaoResponse(component_list=components).get_dict())
+    return KakaoResponse(component_list=components).get_dict()
 
 
 @classroom_router.post(
@@ -193,22 +198,37 @@ async def empty_classroom_by_period(
     start_period_param = payload.action.detail_params.get("start_period")
     end_period_param = payload.action.detail_params.get("end_period")
     if not day_param or not start_period_param or not end_period_param:
-        return JSONResponse(
-            KakaoResponse(
-                component_list=[
-                    SimpleTextComponent(
-                        text="빈 강의실 조회에 필요한 파라미터가 부족합니다."
-                    )
-                ]
-            ).get_dict()
-        )
-    day: str = day_param.value
+        return KakaoResponse(
+            component_list=[
+                SimpleTextComponent(
+                    text="빈 강의실 조회에 필요한 파라미터가 부족합니다."
+                )
+            ]
+        ).get_dict()
+    day = parse_day_name(day_param.value)
+    start_period_raw = extract_text_value(start_period_param.value)
+    end_period_raw = extract_text_value(end_period_param.value)
+    if day is None or start_period_raw is None or end_period_raw is None:
+        return KakaoResponse(
+            component_list=[
+                SimpleTextComponent(
+                    text="빈 강의실 조회 파라미터 형식이 올바르지 않습니다."
+                )
+            ]
+        ).get_dict()
 
-    start_period_str = start_period_param.value.rstrip("교시")
-    end_period_str = end_period_param.value.rstrip("교시")
+    start_period_str = start_period_raw.rstrip("교시")
+    end_period_str = end_period_raw.rstrip("교시")
 
     start_period_match = re.match(r"\d+", start_period_str)
     end_period_match = re.match(r"\d+", end_period_str)
+
+    if not start_period_match or not end_period_match:
+        return KakaoResponse(
+            component_list=[
+                SimpleTextComponent(text="교시 파라미터 형식이 올바르지 않습니다.")
+            ]
+        ).get_dict()
 
     start_period: int = int(start_period_match.group())
     end_period: int = int(end_period_match.group())
@@ -221,7 +241,7 @@ async def empty_classroom_by_period(
         client, day, start_period, end_period
     )
     components = make_empty_classroom_components(empty_classrooms)
-    return JSONResponse(KakaoResponse(component_list=components).get_dict())
+    return KakaoResponse(component_list=components).get_dict()
 
 
 @classroom_router.post(
@@ -243,7 +263,7 @@ async def empty_classroom_by_period(
 )
 async def empty_classroom_detail(
     payload: Annotated[Payload, Depends(parse_payload)],
-) -> EmptyClassroomInfo:
+) -> dict:
     """빈 강의실 상세 정보를 조회합니다.
 
     빈 강의실 상세 정보를 조회하여 캐로셀 형태로 반환합니다.
@@ -265,9 +285,11 @@ async def empty_classroom_detail(
         JSONResponse: 빈 강의실 상세 정보가 담긴 JSON 응답
     """
     logger.info("빈 강의실 상세 정보 조회 called")
-    carousel = make_empty_classroom_detail_component(
-        info=payload.action.client_extra.get("empty_classroom_info")
-    )
-    response = KakaoResponse()
-    response.add_component(carousel)
-    return JSONResponse(response.get_dict())
+    info = payload.action.client_extra.get("empty_classroom_info")
+    if info is None:
+        return KakaoResponse(
+            component_list=[SimpleTextComponent(text="상세 정보를 찾을 수 없습니다.")]
+        ).get_dict()
+
+    carousel = make_empty_classroom_detail_component(info=info)
+    return KakaoResponse(component_list=[carousel]).get_dict()

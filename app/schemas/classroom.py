@@ -1,7 +1,8 @@
 """이 모듈은 교실 및 빈 강의실 정보를 나타내는 데이터 모델을 정의합니다."""
+
 from typing import Dict, List, Literal
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 BuildingName = Literal[
@@ -18,7 +19,17 @@ BuildingName = Literal[
     "산융",
     "종합",
     "제2생",
-    "중앙"
+    "중앙",
+]
+
+DayName = Literal[
+    "일요일",
+    "월요일",
+    "화요일",
+    "수요일",
+    "목요일",
+    "금요일",
+    "토요일",
 ]
 
 
@@ -28,6 +39,7 @@ class Classroom(BaseModel):
     Attributes:
         room_name (str): 교실의 이름을 나타냅니다.
     """
+
     room_name: str
 
 
@@ -38,9 +50,10 @@ class EmptyClassroomInfo(BaseModel):
         building (str): 건물 이름입니다.
         empty_classrooms (List[Classroom]): 빈 강의실 목록입니다.
     """
+
     building: BuildingName
     empty_classrooms: List[Classroom]
-    empty_classrooms_by_floor: Dict[int, List[Classroom]] = []
+    empty_classrooms_by_floor: Dict[int, List[Classroom]] = Field(default_factory=dict)
 
     @field_validator("empty_classrooms", mode="before")
     @classmethod

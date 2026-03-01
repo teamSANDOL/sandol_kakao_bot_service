@@ -2,8 +2,9 @@
 
 import re
 import string
-from typing import List
+from typing import List, TypeGuard, get_args
 
+from kakao_chatbot.response.base import ParentComponent
 from kakao_chatbot.response.components import (
     ItemCardComponent,
     Item,
@@ -13,8 +14,25 @@ from kakao_chatbot.response.components import (
 )
 
 from app.config import BlockID, logger
-from app.schemas.classroom import EmptyClassroomInfo, Classroom
-from app.utils.kakao import KakaoError
+from app.schemas.classroom import DayName, EmptyClassroomInfo, Classroom
+from app.utils.kakao import KakaoError, extract_text_value
+
+
+def is_day_name(value: str) -> TypeGuard[DayName]:
+    """문자열이 허용된 요일 형식인지 검사합니다."""
+    return value in get_args(DayName)
+
+
+def parse_day_name(value: object) -> DayName | None:
+    """detail param value에서 요일 문자열을 추출하고 형식을 검증합니다."""
+    # TODO(refactor): detail param 타입이 정리되면 `value: object`를
+    # DayName 후보 타입으로 축소하고 파싱 책임을 분리합니다.
+    day = extract_text_value(value)
+    if day is None:
+        return None
+    if is_day_name(day):
+        return day
+    return None
 
 
 def parse_floor(room: str) -> int | None:
@@ -90,7 +108,7 @@ def make_empty_classroom_component(
 
 def make_empty_classroom_components(
     empty_list: List[EmptyClassroomInfo],
-) -> List[ItemCardComponent] | List[CarouselComponent] | List[SimpleTextComponent]:
+) -> list[ParentComponent]:
     """빈 강의실 목록을 케로셀 형식으로 변환합니다.
 
     - 1개: 단일 카드
@@ -102,8 +120,7 @@ def make_empty_classroom_components(
         empty_list (List[EmptyClassroomInfo]): 빈 강의실 정보 리스트
 
     Returns:
-        List[ItemCardComponent] | List[CarouselComponent] | List[SimpleTextComponent]:
-            빈 강의실 정보가 담긴 카드 또는 케로셀 컴포넌트 리스트
+        list[ParentComponent]: 빈 강의실 정보가 담긴 카드/케로셀/텍스트 컴포넌트 리스트
     """
     if not empty_list:
         return [SimpleTextComponent(text="빈 강의실 정보가 없습니다.")]
@@ -126,11 +143,11 @@ def make_empty_classroom_components(
     if not alphabet_components and not non_alphabet_components:
         return [SimpleTextComponent(text="빈 강의실 정보가 없습니다.")]
 
-    result: list[CarouselComponent] | list[ItemCardComponent] = []
+    result: list[ParentComponent] = []
 
     def to_carousels(
         components: list[ItemCardComponent],
-    ) -> list[CarouselComponent] | list[ItemCardComponent]:
+    ) -> list[ParentComponent]:
         if not components:
             return []
         if len(components) == 1:
@@ -140,14 +157,16 @@ def make_empty_classroom_components(
             for i in range(0, len(components), 10)
         ]
 
-    result.extend(to_carousels(alphabet_components))
-    result.extend(to_carousels(non_alphabet_components))
+    for grouped_component in to_carousels(alphabet_components):
+        result.append(grouped_component)
+    for grouped_component in to_carousels(non_alphabet_components):
+        result.append(grouped_component)
 
     return result
 
 
 def make_empty_classroom_detail_component(
-    info: str,
+    info: object,
 ) -> CarouselComponent:
     """빈 강의실 상세 정보를 카드 형식으로 변환합니다.
 
@@ -157,6 +176,8 @@ def make_empty_classroom_detail_component(
     Returns:
         CarouselComponent: 빈 강의실 상세 정보가 담긴 케로셀 컴포넌트
     """
+    # TODO(refactor): client_extra.empty_classroom_info 타입을 TypedDict/모델로 고정해
+    # `info: object`를 `dict[str, object] | EmptyClassroomInfo` 수준으로 축소합니다.
     empty_classrooms = EmptyClassroomInfo.model_validate(info)
     if not empty_classrooms.empty_classrooms_by_floor:
         raise KakaoError(f"{empty_classrooms.building}에 빈 강의실이 없습니다.")
