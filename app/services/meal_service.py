@@ -1,6 +1,6 @@
 """식단/식당 조회 및 등록을 위한 외부 API 연동 서비스입니다."""
 
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from httpx import AsyncClient
 
@@ -100,7 +100,7 @@ async def fetch_my_restaurants(
         {"owner_user_id": user_id},
         {"manager_user_id": user_id},
     ]
-    restaurants = []
+    restaurants: list[dict[str, Any]] = []
 
     for params in params_list:
         response = await client.get(
@@ -111,9 +111,11 @@ async def fetch_my_restaurants(
         data = response.json().get("data", [])
         logger.info("Fetched %d restaurants with data %s", len(data), data)
         restaurants.extend(data)
-    response = [RestaurantResponse.model_validate(item) for item in restaurants]
-    logger.debug(f"Fetched restaurants response: {response}")
-    return response
+    restaurant_responses = [
+        RestaurantResponse.model_validate(item) for item in restaurants
+    ]
+    logger.debug(f"Fetched restaurants response: {restaurant_responses}")
+    return restaurant_responses
 
 
 async def post_meal(

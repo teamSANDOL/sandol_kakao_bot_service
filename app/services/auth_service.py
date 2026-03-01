@@ -10,7 +10,7 @@ from datetime import datetime, timezone, timedelta
 
 from aiosqlite import IntegrityError
 import jwt
-from diskcache import FanoutCache
+from diskcache import FanoutCache  # type: ignore[import-untyped]
 from pydantic import HttpUrl
 from fastapi import HTTPException
 from httpx import AsyncClient, HTTPStatusError
@@ -185,8 +185,15 @@ async def request_token_refresh(
 
 async def generate_login_link(payload: Payload, client: AsyncClient) -> IssueLinkRes:
     """로그인 링크를 auth-relay로부터 발급받습니다."""
+    chatbot_user_id = payload.user_id
+    if chatbot_user_id is None:
+        raise HTTPException(
+            status_code=Config.HttpStatus.BAD_REQUEST,
+            detail="Missing user id in payload",
+        )
+
     request_payload = IssueLinkReq(
-        chatbot_user_id=payload.user_id,
+        chatbot_user_id=chatbot_user_id,
         callback_url=HttpUrl(Config.LOGIN_CALLBACK_URL),
         client_key=Config.KC_CLIENT_ID,
         redirect_after=HttpUrl(Config.LOGIN_REDIRECT_AFTER)
@@ -336,19 +343,24 @@ async def map_keycloak_user(
                 )
 
             # 케이스 4) 한쪽만 존재: 충돌이 아니라면 같은 사용자로 보고 붙여서 갱신
-            u = user_by_keycloak or user_by_kakao_identity
-            if u:
-                # (추가 안전장치) 혹시라도 sub가 있는데 카카오 불일치면 위에서 이미 차단됨
-                u.keycloak_id = keycloak_sub
-                u.kakao_id = kakao_id
-                u.plusfriend_user_key = plusfriend_user_key
-                u.access_token = encrypted_access_token
-                u.refresh_token = encrypted_refresh_token
-                u.access_token_expires_at = access_expires_at
-                u.refresh_token_expires_at = refresh_expires_at
-                await db.flush()
-                await db.refresh(u)
-                return u
+            existing_user = user_by_keycloak or user_by_kakao_identity
+            if existing_user is None:
+                raise HTTPException(
+                    status_code=Config.HttpStatus.INTERNAL_SERVER_ERROR,
+                    detail="User mapping state is inconsistent",
+                )
+
+            # (추가 안전장치) 혹시라도 sub가 있는데 카카오 불일치면 위에서 이미 차단됨
+            existing_user.keycloak_id = keycloak_sub
+            existing_user.kakao_id = kakao_id
+            existing_user.plusfriend_user_key = plusfriend_user_key
+            existing_user.access_token = encrypted_access_token
+            existing_user.refresh_token = encrypted_refresh_token
+            existing_user.access_token_expires_at = access_expires_at
+            existing_user.refresh_token_expires_at = refresh_expires_at
+            await db.flush()
+            await db.refresh(existing_user)
+            return existing_user
 
             # 케이스 5) 완전 신규
             new_user = User(

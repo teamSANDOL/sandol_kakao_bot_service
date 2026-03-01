@@ -384,7 +384,8 @@ async def select_restaurant(
     )
 
     response = KakaoResponse()
-
+    if payload.flow is None:
+        raise KakaoError(response)
     text_card = TextCardComponent(
         title="식당 선택",
         description="식당을 선택하세요.",
