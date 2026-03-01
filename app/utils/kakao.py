@@ -104,6 +104,22 @@ async def parse_payload(request: Request) -> Payload:
     return Payload.from_dict(data_dict)
 
 
+def extract_text_value(value: object) -> str | None:
+    """detail/client 파라미터 값에서 문자열을 안전하게 추출합니다."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        nested = value.get("value")
+        if isinstance(nested, str):
+            return nested
+    if isinstance(value, object):
+        for attr in ("value", "origin"):
+            nested = getattr(value, attr, None)
+            if isinstance(nested, str):
+                return nested
+    return None
+
+
 def error_message(message: str | BaseException) -> TextCardComponent:
     """에러 메시지를 반환합니다.
 

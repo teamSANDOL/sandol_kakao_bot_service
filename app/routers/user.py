@@ -6,8 +6,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Header, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, HTTPException, Header
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -49,7 +48,7 @@ async def get_login_link(
     """로그인 버튼을 제공합니다."""
     login_link_response: IssueLinkRes = await generate_login_link(payload, client)
     response: KakaoResponse = await make_login_link_response(login_link_response)
-    return JSONResponse(content=response.get_dict())
+    return response.get_dict()
 
 
 @user_router.post(
@@ -146,7 +145,7 @@ async def login_callback(
             e.status_code,
             e.detail,
         )
-        return JSONResponse(content={"error": e.detail}, status_code=e.status_code)
+        return {"error": e.detail, "status_code": e.status_code}
 
     except Exception as e:
         # 예기치 못한 오류 → 500으로 래핑
@@ -154,10 +153,7 @@ async def login_callback(
             "Unexpected error during login callback for kakao_id: %s",
             data.chatbot_user_id,
         )
-        return JSONResponse(
-            content={"error": "internal_server_error", "detail": str(e)},
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
+        return {"error": "internal_server_error", "detail": str(e), "status_code": 500}
 
 
 @user_router.post("/info", summary="내 정보 조회")
@@ -178,4 +174,4 @@ async def get_my_info(
     logger.info("User info retrieved: %s", user_info.sub)
 
     response: KakaoResponse = await make_user_info_response(user_info)
-    return JSONResponse(content=response.get_dict())
+    return response.get_dict()

@@ -7,12 +7,9 @@ from typing import Annotated
 
 from fastapi import Depends
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse
 from httpx import AsyncClient
 from kakao_chatbot import Payload
-from kakao_chatbot.response import (
-    KakaoResponse,
-)
+from kakao_chatbot.response import KakaoResponse
 from kakao_chatbot.response.components import (
     SimpleTextComponent,
     SimpleImageComponent,
@@ -24,7 +21,7 @@ from app.services.static_service import (
     search_organization,
 )
 from app.utils.http import get_async_client
-from app.utils.kakao import parse_payload
+from app.utils.kakao import parse_payload, extract_text_value
 from app.utils.openapi import create_openapi_extra
 from app.utils.statics import (
     make_org_group_list,
@@ -72,21 +69,20 @@ async def info(
     Returns:
         JSONResponse: 학교 조직 정보
     """
-    org = payload.action.params.get("organization", None)
+    org_raw = payload.action.params.get("organization", None)
+    org = extract_text_value(org_raw) if org_raw is not None else None
     if org is None:
         org = "대표연락처"
     unit = await search_organization(client, org)
 
-    response = KakaoResponse()
     if unit is None:
-        response.add_component(SimpleTextComponent("해당 조직을 찾을 수 없습니다."))
-        return JSONResponse(response.get_dict())
+        return KakaoResponse(
+            component_list=[SimpleTextComponent("해당 조직을 찾을 수 없습니다.")]
+        ).get_dict()
 
     if isinstance(unit, OrganizationGroup):
-        response.add_component(make_org_group_list(unit))
-    else:
-        response.add_component(make_unit_item(unit))
-    return JSONResponse(response.get_dict())
+        return KakaoResponse(component_list=[make_org_group_list(unit)]).get_dict()
+    return KakaoResponse(component_list=[make_unit_item(unit)]).get_dict()
 
 
 @statics_router.post(
@@ -120,9 +116,9 @@ async def unit_info(payload: Annotated[Payload, Depends(parse_payload)]):
     Returns:
         JSONResponse: 학교 조직 정보
     """
-    response = KakaoResponse()
-    response.add_component(make_unit_item(payload.action.client_extra))
-    return JSONResponse(response.get_dict())
+    return KakaoResponse(
+        component_list=[make_unit_item(payload.action.client_extra)]
+    ).get_dict()
 
 
 @statics_router.post(
@@ -151,8 +147,10 @@ async def shuttle_info(
     shuttle_images = await fetch_shuttle_img_inks(client)
     shuttle_images.reverse()
 
+    components = [
+        SimpleImageComponent(image, "셔틀버스 정보 사진") for image in shuttle_images
+    ]
     response = KakaoResponse()
-    for image in shuttle_images:
-        response.add_component(SimpleImageComponent(image, "셔틀버스 정보 사진"))
-
-    return JSONResponse(response.get_dict())
+    for component in components:
+        response.add_component(component)
+    return response.get_dict()
