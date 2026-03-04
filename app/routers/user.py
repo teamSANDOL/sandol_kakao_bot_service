@@ -70,9 +70,6 @@ async def login_callback(
     # 암호화여부를 명시적으로 나타내기 위해 변수명 변경
     decrypted_access_token = data.relay_access_token
     decrypted_refresh_token = data.offline_refresh_token
-    logger.info(
-        "Auth Relay login callback received: %s", data.model_dump()
-    )  # TODO: Remove sensitive info in production(It may not be only here)
 
     try:
         # --- 1. 콜백 서명/타임스탬프/Nonce 검증 (위·변조 방지) ---
@@ -83,12 +80,6 @@ async def login_callback(
 
         # 필수 필드 검증: 콜백에 토큰이 없으면 구성 오류로 간주
         if not data.relay_access_token or not data.offline_refresh_token:
-            logger.error(
-                "Login callback payload missing required tokens: "
-                "access_token=%s, refresh_token=%s",
-                bool(data.relay_access_token),
-                bool(data.offline_refresh_token),
-            )  # TODO: Remove sensitive info in production(It may not be only here)
             raise HTTPException(
                 status_code=Config.HttpStatus.INTERNAL_SERVER_ERROR,
                 detail=(
