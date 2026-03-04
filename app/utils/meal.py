@@ -215,7 +215,7 @@ def save_menu(
     meal_type_name: str,
     restaurant_name: str,
     menu_list: list,
-    lifspan: int = 5,
+    lifespan: int = 5,
     ttl: int = 300,
     add_mode: bool = False,
 ) -> list[Context]:
@@ -226,7 +226,7 @@ def save_menu(
         meal_type_name (str): 식사 종류 이름입니다.
         restaurant_name (str): 식당 이름입니다.
         menu_list (list): 저장할 메뉴 리스트입니다.
-        lifspan (int, optional): 컨텍스트의 생명주기입니다. 기본값은 5입니다.
+        lifespan (int, optional): 컨텍스트의 생명주기입니다. 기본값은 5입니다.
         ttl (int, optional): 컨텍스트의 TTL입니다. 기본값은 300입니다.
         add_mode (bool, optional): 메뉴 추가 모드 여부입니다. 기본값은 False입니다.
         만약 True인 경우 기존 메뉴에 추가됩니다.
@@ -253,7 +253,7 @@ def save_menu(
                 "menu_list": ContextParam(menu_str, menu_str),
                 "restaurant_name": ContextParam(restaurant_name, restaurant_name),
             },
-            lifespan=lifspan,
+            lifespan=lifespan,
             ttl=ttl,
         )
         contexts.append(new_context)

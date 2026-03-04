@@ -421,7 +421,7 @@ async def meal_delete_all(
         "lunch_menu",
         restaurant.name,
         [],
-        lifspan=0,
+        lifespan=0,
         ttl=0,
     )
     contexts = save_menu(
@@ -429,7 +429,7 @@ async def meal_delete_all(
         "dinner_menu",
         restaurant.name,
         [],
-        lifspan=0,
+        lifespan=0,
         ttl=0,
     )
     lunch, dinner = make_meal_cards([], [])
@@ -796,7 +796,7 @@ async def meal_submit(
         "lunch_menu",
         restaurant.name,
         [],
-        lifspan=0,
+        lifespan=0,
         ttl=0,
     )
     contexts = save_menu(
@@ -804,7 +804,7 @@ async def meal_submit(
         "dinner_menu",
         restaurant.name,
         [],
-        lifspan=0,
+        lifespan=0,
         ttl=0,
     )
     response.contexts = contexts
