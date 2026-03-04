@@ -58,7 +58,7 @@ async def fetch_restaurants(
         response = await client.get(f"{Config.MEAL_SERVICE_URL}/restaurants")
     else:
         response = await client.get(
-            (f"{Config.MEAL_SERVICE_URL}/restaurants/{{restaurant_id}}")
+            (f"{Config.MEAL_SERVICE_URL}/restaurants/{restaurant_id}")
         )
     response.raise_for_status()
     list_data = response.json().get("data", [])
