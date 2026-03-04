@@ -17,7 +17,7 @@ from kakao_chatbot.response.components import (
 
 from app.schemas.statics import OrganizationGroup
 from app.services.static_service import (
-    fetch_shuttle_img_inks,
+    fetch_shuttle_img_links,
     search_organization,
 )
 from app.utils.http import get_async_client
@@ -144,7 +144,7 @@ async def shuttle_info(
     Returns:
         JSONResponse: 셔틀버스 정보
     """
-    shuttle_images = await fetch_shuttle_img_inks(client)
+    shuttle_images = await fetch_shuttle_img_links(client)
     shuttle_images.reverse()
 
     components = [

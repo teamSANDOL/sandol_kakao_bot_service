@@ -69,7 +69,7 @@ async def search_organization(
     return items[0] if items else None
 
 
-async def fetch_shuttle_img_inks(
+async def fetch_shuttle_img_links(
     client: AsyncClient,
 ) -> List[str]:
     """셔틀버스 이미지 링크 리스트를 가져오는 함수.
