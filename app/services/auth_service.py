@@ -344,11 +344,24 @@ async def map_keycloak_user(
 
             # 케이스 4) 한쪽만 존재: 충돌이 아니라면 같은 사용자로 보고 붙여서 갱신
             existing_user = user_by_keycloak or user_by_kakao_identity
+
+            # 케이스 5) 완전 신규
             if existing_user is None:
-                raise HTTPException(
-                    status_code=Config.HttpStatus.INTERNAL_SERVER_ERROR,
-                    detail="User mapping state is inconsistent",
+                new_user = User(
+                    keycloak_id=keycloak_sub,
+                    kakao_id=kakao_id,
+                    plusfriend_user_key=plusfriend_user_key,
+                    app_user_id=None,
+                    kakao_admin=False,
+                    access_token=encrypted_access_token,
+                    refresh_token=encrypted_refresh_token,
+                    access_token_expires_at=access_expires_at,
+                    refresh_token_expires_at=refresh_expires_at,
                 )
+                db.add(new_user)
+                await db.flush()
+                await db.refresh(new_user)
+                return new_user
 
             # (추가 안전장치) 혹시라도 sub가 있는데 카카오 불일치면 위에서 이미 차단됨
             existing_user.keycloak_id = keycloak_sub
@@ -361,23 +374,6 @@ async def map_keycloak_user(
             await db.flush()
             await db.refresh(existing_user)
             return existing_user
-
-            # 케이스 5) 완전 신규
-            new_user = User(
-                keycloak_id=keycloak_sub,
-                kakao_id=kakao_id,
-                plusfriend_user_key=plusfriend_user_key,
-                app_user_id=None,
-                kakao_admin=False,
-                access_token=encrypted_access_token,
-                refresh_token=encrypted_refresh_token,
-                access_token_expires_at=access_expires_at,
-                refresh_token_expires_at=refresh_expires_at,
-            )
-            db.add(new_user)
-            await db.flush()
-            await db.refresh(new_user)
-            return new_user
 
     except IntegrityError as exc:
         logger.error("IntegrityError while mapping user: %s", exc, exc_info=True)
