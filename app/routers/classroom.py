@@ -13,7 +13,7 @@ from kakao_chatbot.response.components import (
 )
 
 from app.config import logger
-from app.services.classroom_timetable_serivce import (
+from app.services.classroom_timetable_service import (
     search_empty_classroom_by_time,
     search_empty_classroom_by_period,
     search_empty_classroom_now,
