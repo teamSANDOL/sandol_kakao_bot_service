@@ -6,6 +6,7 @@ from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Request, status, Depends  # noqa: F401 # pylint: disable=W0611
 from fastapi.responses import JSONResponse  # noqa: F401
+from fastapi.routing import APIRoute
 from kakao_chatbot import Payload
 from kakao_chatbot.response import KakaoResponse
 from kakao_chatbot.response.components import SimpleTextComponent
@@ -41,10 +42,9 @@ async def lifespan(app: FastAPI):
     )
 
     # 애플리케이션 시작 시 데이터베이스 테이블 생성
-    await init_db()
-
-    # 서버 시작 시 서비스 계정 설정 실행
-    # await set_service_account()
+    if Config.debug:
+        logger.debug("Debug 모드: 데이터베이스 initialization 시작")
+        await init_db()
 
     yield  # FastAPI가 실행 중인 동안 유지됨
 
@@ -63,8 +63,14 @@ admin = Admin(app=app, engine=async_engine)
 admin.add_view(UserAdmin)
 
 
+def is_internal_route(request: Request) -> bool:
+    """요청이 internal 라우트에 대한 것인지 확인하는 유틸리티 함수입니다."""
+    route = request.scope.get("route")
+    return isinstance(route, APIRoute) and "internal" in set(route.tags or [])
+
+
 @app.exception_handler(Exception)
-async def http_exception_handler(request: Request, exc: Exception):
+async def http_exception_handler(request: Request, exc: Exception | HTTPException):
     """HTTPException 핸들러입니다.
 
     예외 발생 시 적절한 응답을 반환합니다.
@@ -78,6 +84,15 @@ async def http_exception_handler(request: Request, exc: Exception):
     Returns:
         JSONResponse: 예외에 대한 JSON 응답
     """
+    if is_internal_route(request):
+        if isinstance(exc, HTTPException):
+            return JSONResponse(
+                status_code=exc.status_code, content={"detail": exc.detail}
+            )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"detail": "Internal Server Error"},
+        )
     if isinstance(exc, (KakaoError, LoginRequiredError, NotAuthorizedError)):
         return JSONResponse(exc.get_response().get_dict())
 
@@ -89,7 +104,7 @@ async def http_exception_handler(request: Request, exc: Exception):
     return JSONResponse(KakaoResponse().add_component(error_message(exc)).get_dict())
 
 
-@app.get("/")
+@app.get("/", tags=["internal"])
 async def root():
     """루트 엔드포인트입니다."""
     logger.info("Root endpoint accessed")
@@ -111,7 +126,7 @@ async def get_id(payload: Annotated[Payload, Depends(parse_payload)]):
     return JSONResponse(response.get_dict())
 
 
-@app.get("/health")
+@app.get("/health", tags=["internal"])
 async def health_check():
     """Health check 엔드포인트입니다."""
     return JSONResponse({"status": "ok"})
