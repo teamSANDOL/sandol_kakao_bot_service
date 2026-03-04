@@ -8,7 +8,6 @@ import json
 import time
 from datetime import datetime, timezone, timedelta
 
-from aiosqlite import IntegrityError
 import jwt
 from diskcache import FanoutCache  # type: ignore[import-untyped]
 from pydantic import HttpUrl
@@ -17,6 +16,7 @@ from httpx import AsyncClient, HTTPStatusError
 from keycloak import KeycloakOpenID
 from keycloak.exceptions import KeycloakError
 from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from kakao_chatbot import Payload
