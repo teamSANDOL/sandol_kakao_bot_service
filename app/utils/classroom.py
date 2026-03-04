@@ -2,7 +2,7 @@
 
 import re
 import string
-from typing import List, TypeGuard, get_args
+from typing import List, Mapping, Protocol, TypeGuard, TypedDict, get_args
 
 from kakao_chatbot.response.base import ParentComponent
 from kakao_chatbot.response.components import (
@@ -14,8 +14,32 @@ from kakao_chatbot.response.components import (
 )
 
 from app.config import BlockID, logger
-from app.schemas.classroom import DayName, EmptyClassroomInfo, Classroom
+from app.schemas.classroom import BuildingName, DayName, EmptyClassroomInfo, Classroom
 from app.utils.kakao import KakaoError, extract_text_value
+
+
+class SupportsValueOrOrigin(Protocol):
+    """`value` 또는 `origin` 속성을 가지는 입력 타입 프로토콜."""
+
+    value: object
+    origin: object
+
+
+DayParamValue = str | Mapping[str, object] | SupportsValueOrOrigin
+
+
+class ClassroomPayload(TypedDict):
+    """빈 강의실 상세 payload 내 단일 강의실 항목 타입."""
+
+    room_name: str
+
+
+class EmptyClassroomInfoPayload(TypedDict, total=False):
+    """client_extra.empty_classroom_info의 허용 payload 타입."""
+
+    building: BuildingName
+    empty_classrooms: list[ClassroomPayload]
+    empty_classrooms_by_floor: dict[int, list[ClassroomPayload]]
 
 
 def is_day_name(value: str) -> TypeGuard[DayName]:
@@ -23,10 +47,8 @@ def is_day_name(value: str) -> TypeGuard[DayName]:
     return value in get_args(DayName)
 
 
-def parse_day_name(value: object) -> DayName | None:
+def parse_day_name(value: DayParamValue) -> DayName | None:
     """detail param value에서 요일 문자열을 추출하고 형식을 검증합니다."""
-    # TODO(refactor): detail param 타입이 정리되면 `value: object`를
-    # DayName 후보 타입으로 축소하고 파싱 책임을 분리합니다.
     day = extract_text_value(value)
     if day is None:
         return None
@@ -166,7 +188,7 @@ def make_empty_classroom_components(
 
 
 def make_empty_classroom_detail_component(
-    info: object,
+    info: EmptyClassroomInfo | EmptyClassroomInfoPayload,
 ) -> CarouselComponent:
     """빈 강의실 상세 정보를 카드 형식으로 변환합니다.
 
@@ -176,8 +198,6 @@ def make_empty_classroom_detail_component(
     Returns:
         CarouselComponent: 빈 강의실 상세 정보가 담긴 케로셀 컴포넌트
     """
-    # TODO(refactor): client_extra.empty_classroom_info 타입을 TypedDict/모델로 고정해
-    # `info: object`를 `dict[str, object] | EmptyClassroomInfo` 수준으로 축소합니다.
     empty_classrooms = EmptyClassroomInfo.model_validate(info)
     if not empty_classrooms.empty_classrooms_by_floor:
         raise KakaoError(f"{empty_classrooms.building}에 빈 강의실이 없습니다.")
