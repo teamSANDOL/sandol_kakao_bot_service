@@ -99,9 +99,9 @@ async def parse_payload(request: Request) -> Payload:
     Request에서 JSON 데이터를 추출하여 Payload 객체로 변환합니다.
     FastAPI의 Dependency Injection을 사용하기 위한 함수입니다.
     """
+    payload = Payload.from_dict(await request.json())
     logger.debug("사용자 요청\n%s", await request.body())
-    data_dict = await request.json()
-    return Payload.from_dict(data_dict)
+    return payload
 
 
 def extract_text_value(value: object) -> str | None:
