@@ -79,7 +79,11 @@ class Config:
     )
     KC_CLIENT_ID = os.getenv("KC_CLIENT_ID", "sandol-kakao-bot")
     KC_REALM = os.getenv("KC_REALM", "Sandori")
-    KC_CLIENT_SECRET = os.getenv("KC_CLIENT_SECRET", "your-kakao-bot-client-secret")
+    KC_CLIENT_SECRET = os.getenv("KC_CLIENT_SECRET")
+    if not KC_CLIENT_SECRET and not debug:
+        raise RuntimeError(
+            "KC_CLIENT_SECRET environment variable must be set when DEBUG is false."
+        )
 
     TIMEZONE = os.getenv("TIMEZONE", "Asia/Seoul")
     TZ = timezone(TIMEZONE)
