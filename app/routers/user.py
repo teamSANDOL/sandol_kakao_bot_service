@@ -68,7 +68,6 @@ async def login_callback(
     x_relay_signature: str | None = Header(default=None),
 ):
     """로그인 콜백을 처리하고, 콜백에 포함된 토큰을 이용해 Keycloak 사용자 매핑을 수행합니다."""
-
     # 암호화여부를 명시적으로 나타내기 위해 변수명 변경
     decrypted_access_token = data.relay_access_token
     decrypted_refresh_token = data.offline_refresh_token
@@ -138,15 +137,18 @@ async def login_callback(
             e.status_code,
             e.detail,
         )
-        return {"error": e.detail, "status_code": e.status_code}
+        raise
 
     except Exception as e:
-        # 예기치 못한 오류 → 500으로 래핑
         logger.error(
             "Unexpected error during login callback for kakao_id: %s",
             data.chatbot_user_id,
+            exc_info=True,
         )
-        return {"error": "internal_server_error", "detail": str(e), "status_code": 500}
+        raise HTTPException(
+            status_code=Config.HttpStatus.INTERNAL_SERVER_ERROR,
+            detail="internal_server_error",
+        ) from e
 
 
 @user_router.post("/info", summary="내 정보 조회")
