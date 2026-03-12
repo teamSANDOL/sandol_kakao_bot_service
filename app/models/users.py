@@ -36,7 +36,7 @@ class User(Base):
         kakao_admin (bool): 해당 카카오 사용자가 서비스 내 관리자 권한을 가졌는지 여부.
     """
 
-    __tablename__ = "user"
+    __tablename__ = "user_map"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     keycloak_id: Mapped[str] = mapped_column(
