@@ -89,6 +89,11 @@ class Config:
     TZ = timezone(TIMEZONE)
 
     RELAY_CLIENT_SECRETS = os.getenv("RELAY_CLIENT_SECRETS", "")
+    if not debug and not RELAY_CLIENT_SECRETS:
+        raise RuntimeError(
+            "RELAY_CLIENT_SECRETS environment variable must be set and non-empty "
+            "when DEBUG is false."
+        )
     NONCE_TTL_SECONDS = int(os.getenv("NONCE_TTL_SECONDS", "300"))
 
     class HttpStatus:
