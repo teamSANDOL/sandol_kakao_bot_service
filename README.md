@@ -37,8 +37,8 @@
 ## 📌 문서
 
 - **문서 링크**
-  - [로컬 서버 Swagger UI](http://localhost:80/kakao-bot/docs)
-  - http://localhost:80/kakao-bot/docs
+  - 로컬 서버 Swagger UI
+    - http://localhost:80/kakao-bot/docs
 - **서비스 관련 문서**
   - 카카오 OpenBuilder 가이드: [OpenBuilder 가이드](https://kakaobusiness.gitbook.io/main/tool/chatbot/skill_guide/answer_json_format)
 
