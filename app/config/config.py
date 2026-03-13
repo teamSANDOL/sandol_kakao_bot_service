@@ -80,21 +80,28 @@ class Config:
     KC_CLIENT_ID = os.getenv("KC_CLIENT_ID", "sandol-kakao-bot")
     KC_REALM = os.getenv("KC_REALM", "Sandori")
     KC_CLIENT_SECRET = os.getenv("KC_CLIENT_SECRET")
-    if not KC_CLIENT_SECRET and not debug:
-        raise RuntimeError(
-            "KC_CLIENT_SECRET environment variable must be set when DEBUG is false."
-        )
 
     TIMEZONE = os.getenv("TIMEZONE", "Asia/Seoul")
     TZ = timezone(TIMEZONE)
 
+    TOKEN_ENCRYPTION_KEY = os.getenv("TOKEN_ENCRYPTION_KEY")
+
     RELAY_CLIENT_SECRETS = os.getenv("RELAY_CLIENT_SECRETS", "")
-    if not debug and not RELAY_CLIENT_SECRETS:
-        raise RuntimeError(
-            "RELAY_CLIENT_SECRETS environment variable must be set and non-empty "
-            "when DEBUG is false."
-        )
     NONCE_TTL_SECONDS = int(os.getenv("NONCE_TTL_SECONDS", "300"))
+
+    @classmethod
+    def _validate(cls) -> None:
+        if not cls.TOKEN_ENCRYPTION_KEY:
+            raise RuntimeError("TOKEN_ENCRYPTION_KEY environment variable must be set.")
+        if not cls.debug and not cls.KC_CLIENT_SECRET:
+            raise RuntimeError(
+                "KC_CLIENT_SECRET environment variable must be set when DEBUG is false."
+            )
+        if not cls.debug and not cls.RELAY_CLIENT_SECRETS:
+            raise RuntimeError(
+                "RELAY_CLIENT_SECRETS environment variable must be set and non-empty "
+                "when DEBUG is false."
+            )
 
     class HttpStatus:
         """HTTP 상태 코드를 정의하는 클래스입니다."""
@@ -109,3 +116,6 @@ class Config:
         CONFLICT = 409
         INTERNAL_SERVER_ERROR = 500
         BAD_GATEWAY = 502
+
+
+Config._validate()
