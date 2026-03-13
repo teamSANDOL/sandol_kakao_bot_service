@@ -37,7 +37,6 @@ async def lifespan(app: FastAPI):
             "dubug": Config.debug,
             "timezone": Config.TIMEZONE,
             "database_url": Config.DATABASE_URL,
-            "user_service_url": Config.USER_SERVICE_URL,
         },
     )
 

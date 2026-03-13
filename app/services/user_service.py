@@ -1,20 +1,17 @@
 """User Service Module."""
 
 from datetime import datetime, timezone, timedelta
-from typing import Annotated, AsyncGenerator, Any, cast
+from typing import Annotated, AsyncGenerator
 
 import jwt
 from fastapi import Depends, Header, HTTPException
 from httpx import AsyncClient
 from keycloak import KeycloakError
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import Insert as PGInsert
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from kakao_chatbot import Payload
 from kakao_chatbot.response import KakaoResponse
-from kakao_chatbot.response.components import SimpleTextComponent
 
 from app.config import BlockID, Config, logger
 from app.models.users import User
@@ -326,20 +323,6 @@ async def get_xuser_client_by_payload(
     async with XUserIDClient(
         user_id=user_id,
         access_token=access_token,
-    ) as client:
-        yield client
-
-
-async def get_service_xuser_client() -> AsyncGenerator[XUserIDClient, None]:
-    """서비스 계정 정보를 사용해 HTTP 클라이언트를 생성합니다."""
-    if not Config.SERVICE_ACCOUNT_TOKEN:
-        logger.debug(
-            "SERVICE_ACCOUNT_TOKEN이 설정되지 않았습니다. 무인증 호출을 시도합니다."
-        )
-    async with XUserIDClient(
-        Config.SERVICE_ACCOUNT_SUB,
-        access_token=Config.SERVICE_ACCOUNT_TOKEN,
-        token_type=Config.SERVICE_ACCOUNT_TOKEN_TYPE,
     ) as client:
         yield client
 
