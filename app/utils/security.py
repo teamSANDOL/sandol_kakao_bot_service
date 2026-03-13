@@ -1,17 +1,12 @@
 """토큰 암복호화 보안 유틸리티를 제공합니다."""
 
-import os
-from cryptography.fernet import Fernet
-from app.config import logger
-from cryptography.fernet import InvalidToken
+from typing import cast
 
-# 환경변수에서 직접 로드
-ENCRYPTION_KEY = os.getenv("TOKEN_ENCRYPTION_KEY")
-if not ENCRYPTION_KEY:
-    logger.error("TOKEN_ENCRYPTION_KEY가 설정되지 않았습니다!")
-    raise ValueError("Encryption key not set")
+from cryptography.fernet import Fernet, InvalidToken
 
-fernet = Fernet(ENCRYPTION_KEY.encode("utf-8"))
+from app.config import Config, logger
+
+fernet = Fernet(cast(str, Config.TOKEN_ENCRYPTION_KEY).encode("utf-8"))
 
 
 def encrypt_token(token: str) -> str:
@@ -26,14 +21,12 @@ def decrypt_token(encrypted_token: str) -> str:
         raise ValueError("Encrypted token is required")
 
     try:
-        # 지역 임포트로 InvalidToken을 잡습니다.
-
         return fernet.decrypt(encrypted_token.encode("utf-8")).decode("utf-8")
-    except InvalidToken:
+    except InvalidToken as exc:
         logger.warning(
             "decrypt_token: 토큰 복호화 실패 - 변조되었거나 유효하지 않은 토큰입니다."
         )
-        raise ValueError("Invalid or tampered token")
+        raise ValueError("Invalid or tampered token") from exc
     except Exception as exc:
         logger.error(
             "decrypt_token: 토큰 복호화 중 예기치 못한 오류가 발생했습니다.",
