@@ -34,7 +34,7 @@ async def lifespan(app: FastAPI):
     logger.debug(
         "Cofing 정보 로드 %s",
         {
-            "dubug": Config.debug,
+            "debug": Config.debug,
             "timezone": Config.TIMEZONE,
             "database_url": Config.DATABASE_URL,
         },
