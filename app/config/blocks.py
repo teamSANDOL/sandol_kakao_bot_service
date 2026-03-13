@@ -12,6 +12,8 @@ HELP = QuickReply(label="도움말", message_text="도움말")
 
 # 블록 ID 관리
 class BlockID(str, Enum):
+    """카카오 OpenBuilder 블록 ID 상수 모음입니다."""
+
     CONFIRM = "6721838c369c0a05baca37a1"
     ADD_LUNCH_MENU = "672181220b8411112c75c884"
     ADD_DINNER_MENU = "672181305e0ed128077abf5e"
@@ -23,6 +25,7 @@ class BlockID(str, Enum):
     RESTAURANT_INFO = "672183965e0ed128077abfe3"
     SELECT_RESTAURANT = "67f3d3080e01a1241f2707c7"
     CLASSROOM_DETAIL = "683585d52a22a85698b931d5"
+    LOGIN = "686a75d32036e951aa06169c"
 
 
 def get_cafeteria_register_quick_replies(

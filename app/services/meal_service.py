@@ -1,4 +1,8 @@
-from typing import List, Optional
+"""식단/식당 조회 및 등록을 위한 외부 API 연동 서비스입니다."""
+
+from typing import Any, List, Optional
+
+from httpx import AsyncClient
 
 from app.config import Config, logger
 from app.schemas.meals import MealType, MealResponse, RestaurantResponse
@@ -6,10 +10,10 @@ from app.utils.http import XUserIDClient
 
 
 async def fetch_latest_meals(
-    client: XUserIDClient,
+    client: AsyncClient,
     restaurant_id: Optional[int] = None,
 ) -> List[MealResponse]:
-    """식사 정보를 가져오는 함수
+    """식사 정보를 가져오는 함수.
 
     Args:
         client (XUserIDClient): HTTP 클라이언트 인스턴스
@@ -35,10 +39,10 @@ async def fetch_latest_meals(
 
 
 async def fetch_restaurants(
-    client: XUserIDClient,
+    client: AsyncClient,
     restaurant_id: Optional[int] = None,
 ) -> List[RestaurantResponse]:
-    """식당 정보를 가져오는 함수
+    """식당 정보를 가져오는 함수.
 
     Args:
         client (XUserIDClient): HTTP 클라이언트 인스턴스
@@ -54,7 +58,7 @@ async def fetch_restaurants(
         response = await client.get(f"{Config.MEAL_SERVICE_URL}/restaurants")
     else:
         response = await client.get(
-            (f"{Config.MEAL_SERVICE_URL}/restaurants/{{restaurant_id}}")
+            (f"{Config.MEAL_SERVICE_URL}/restaurants/{restaurant_id}")
         )
     response.raise_for_status()
     list_data = response.json().get("data", [])
@@ -65,7 +69,7 @@ async def fetch_restaurants(
 
 async def fetch_restaurant_by_name(
     name: str,
-    client: XUserIDClient,
+    client: AsyncClient,
 ) -> Optional[RestaurantResponse]:
     """식당 이름으로 식당을 검색하여 반환합니다 (부분 일치)."""
     response = await client.get(
@@ -79,35 +83,39 @@ async def fetch_restaurant_by_name(
 
 
 async def fetch_my_restaurants(
-    user_id: int,
+    user_id: str,
     client: XUserIDClient,
 ) -> List[RestaurantResponse]:
     """사용자가 관리자 또는 소유자로 등록된 식당들을 조회합니다.
 
     Args:
-        user_id (int): 사용자 ID
-        client (XUserIDClient): HTTP 클라이언트 인스턴스
+        user_id (str): Keycloak 사용자 `id`.
+        client (XUserIDClient): HTTP 클라이언트 인스턴스.
 
     Returns:
-        List[RestaurantResponse]: 사용자가 관련된 식당 정보 리스트
+        List[RestaurantResponse]: 사용자가 관련된 식당 정보 리스트.
     """
-    logger.info(f"Fetching restaurants for user_id: {user_id}")
-    params_list = [
-        {"owner_id": user_id, "size": 100},
-        {"manager_id": user_id, "size": 100},
+    logger.info("Fetching restaurants for user_id: %s", user_id)
+    params_list: list[dict[str, str]] = [
+        {"owner_user_id": user_id},
+        {"manager_user_id": user_id},
     ]
-    restaurants = []
+    restaurants: list[dict[str, Any]] = []
 
     for params in params_list:
         response = await client.get(
-            f"{Config.MEAL_SERVICE_URL}/restaurants/", params=params
+            f"{Config.MEAL_SERVICE_URL}/restaurants/",
+            params=params,
         )
         response.raise_for_status()
         data = response.json().get("data", [])
+        logger.info("Fetched %d restaurants with data %s", len(data), data)
         restaurants.extend(data)
-
-    logger.debug(f"Fetched restaurants: {restaurants}")
-    return [RestaurantResponse.model_validate(item) for item in restaurants]
+    restaurant_responses = [
+        RestaurantResponse.model_validate(item) for item in restaurants
+    ]
+    logger.debug(f"Fetched restaurants response: {restaurant_responses}")
+    return restaurant_responses
 
 
 async def post_meal(

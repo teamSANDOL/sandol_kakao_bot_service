@@ -1,5 +1,8 @@
-"""학교 조직 정보 및 셔틀버스 이미지 링크를 가져오는 서비스 모듈"""
+"""학교 조직 정보 및 셔틀버스 이미지 링크를 가져오는 서비스 모듈."""
+
 from typing import List, Optional, Union
+
+from httpx import AsyncClient
 
 from app.config import Config, logger
 from app.schemas.statics import (
@@ -8,12 +11,10 @@ from app.schemas.statics import (
     OrganizationType,
     UniversityStructure,
 )
-from app.utils.http import XUserIDClient
 
 
-def parse_organization(
-        obj: dict) -> Union[OrganizationUnit, OrganizationGroup]:
-    """dict → Pydantic 조직 객체로 변환"""
+def parse_organization(obj: dict) -> Union[OrganizationUnit, OrganizationGroup]:
+    """Dict → Pydantic 조직 객체로 변환."""
     if obj.get("type") == "unit":
         return OrganizationUnit(**obj)
     if obj.get("type") == "group":
@@ -22,9 +23,9 @@ def parse_organization(
 
 
 async def fetch_university_structure(
-    client: XUserIDClient,
+    client: AsyncClient,
 ) -> UniversityStructure:
-    """학교 조직 정보를 가져오는 함수
+    """학교 조직 정보를 가져오는 함수.
 
     Args:
         client (XUserIDClient): HTTP 클라이언트 인스턴스
@@ -32,9 +33,7 @@ async def fetch_university_structure(
     Returns:
         UniversityStructure: 학교 조직 정보
     """
-    response = await client.get(
-        f"{Config.STATIC_INFO_SERVICE_URL}/organization/tree"
-    )
+    response = await client.get(f"{Config.STATIC_INFO_SERVICE_URL}/organization/tree")
     response.raise_for_status()
     response_json = response.json()
     logger.debug(f"Fetched university structure: {response_json}")
@@ -42,10 +41,10 @@ async def fetch_university_structure(
 
 
 async def search_organization(
-    client: XUserIDClient,
+    client: AsyncClient,
     name: str,
 ) -> Optional[OrganizationType]:
-    """조직 이름으로 조직을 검색하는 함수
+    """조직 이름으로 조직을 검색하는 함수.
 
     Returns:
         Optional[OrganizationUnit | OrganizationGroup]
@@ -70,10 +69,10 @@ async def search_organization(
     return items[0] if items else None
 
 
-async def fetch_shuttle_img_inks(
-    client: XUserIDClient,
+async def fetch_shuttle_img_links(
+    client: AsyncClient,
 ) -> List[str]:
-    """셔틀버스 이미지 링크 리스트를 가져오는 함수
+    """셔틀버스 이미지 링크 리스트를 가져오는 함수.
 
     Args:
         client (XUserIDClient): HTTP 클라이언트 인스턴스

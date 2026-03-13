@@ -1,16 +1,10 @@
 """강의실 관련 유틸리티 모듈입니다."""
-from collections.abc import Sequence
-import json
+
 import re
 import string
-from datetime import datetime
-from typing import Annotated, List, Optional, overload
+from typing import List, Mapping, Protocol, TypeGuard, TypedDict, get_args
 
-from fastapi import Depends
-from fastapi.responses import JSONResponse
-from kakao_chatbot import Payload
-from kakao_chatbot.context import Context, ContextParam
-from kakao_chatbot.response import KakaoResponse
+from kakao_chatbot.response.base import ParentComponent
 from kakao_chatbot.response.components import (
     ItemCardComponent,
     Item,
@@ -20,11 +14,47 @@ from kakao_chatbot.response.components import (
 )
 
 from app.config import BlockID, logger
-from app.schemas.classroom import EmptyClassroomInfo, Classroom
-from app.utils import get_korean_day
-from app.utils.user import get_current_user
-from app.utils.http import XUserIDClient
-from app.utils.kakao import KakaoError, parse_payload
+from app.schemas.classroom import BuildingName, DayName, EmptyClassroomInfo, Classroom
+from app.utils.kakao import KakaoError, extract_text_value
+
+
+class SupportsValueOrOrigin(Protocol):
+    """`value` 또는 `origin` 속성을 가지는 입력 타입 프로토콜."""
+
+    value: object
+    origin: object
+
+
+DayParamValue = str | Mapping[str, object] | SupportsValueOrOrigin
+
+
+class ClassroomPayload(TypedDict):
+    """빈 강의실 상세 payload 내 단일 강의실 항목 타입."""
+
+    room_name: str
+
+
+class EmptyClassroomInfoPayload(TypedDict, total=False):
+    """client_extra.empty_classroom_info의 허용 payload 타입."""
+
+    building: BuildingName
+    empty_classrooms: list[ClassroomPayload]
+    empty_classrooms_by_floor: dict[int, list[ClassroomPayload]]
+
+
+def is_day_name(value: str) -> TypeGuard[DayName]:
+    """문자열이 허용된 요일 형식인지 검사합니다."""
+    return value in get_args(DayName)
+
+
+def parse_day_name(value: DayParamValue) -> DayName | None:
+    """detail param value에서 요일 문자열을 추출하고 형식을 검증합니다."""
+    day = extract_text_value(value)
+    if day is None:
+        return None
+    if is_day_name(day):
+        return day
+    return None
 
 
 def parse_floor(room: str) -> int | None:
@@ -100,7 +130,7 @@ def make_empty_classroom_component(
 
 def make_empty_classroom_components(
     empty_list: List[EmptyClassroomInfo],
-) -> List[ItemCardComponent] | List[CarouselComponent] | List[SimpleTextComponent]:
+) -> list[ParentComponent]:
     """빈 강의실 목록을 케로셀 형식으로 변환합니다.
 
     - 1개: 단일 카드
@@ -112,8 +142,7 @@ def make_empty_classroom_components(
         empty_list (List[EmptyClassroomInfo]): 빈 강의실 정보 리스트
 
     Returns:
-        List[ItemCardComponent] | List[CarouselComponent] | List[SimpleTextComponent]:
-            빈 강의실 정보가 담긴 카드 또는 케로셀 컴포넌트 리스트
+        list[ParentComponent]: 빈 강의실 정보가 담긴 카드/케로셀/텍스트 컴포넌트 리스트
     """
     if not empty_list:
         return [SimpleTextComponent(text="빈 강의실 정보가 없습니다.")]
@@ -136,11 +165,11 @@ def make_empty_classroom_components(
     if not alphabet_components and not non_alphabet_components:
         return [SimpleTextComponent(text="빈 강의실 정보가 없습니다.")]
 
-    result: list[CarouselComponent] | list[ItemCardComponent] = []
+    result: list[ParentComponent] = []
 
     def to_carousels(
         components: list[ItemCardComponent],
-    ) -> list[CarouselComponent] | list[ItemCardComponent]:
+    ) -> list[ParentComponent]:
         if not components:
             return []
         if len(components) == 1:
@@ -150,14 +179,16 @@ def make_empty_classroom_components(
             for i in range(0, len(components), 10)
         ]
 
-    result.extend(to_carousels(alphabet_components))
-    result.extend(to_carousels(non_alphabet_components))
+    for grouped_component in to_carousels(alphabet_components):
+        result.append(grouped_component)
+    for grouped_component in to_carousels(non_alphabet_components):
+        result.append(grouped_component)
 
     return result
 
 
 def make_empty_classroom_detail_component(
-    info: str,
+    info: EmptyClassroomInfo | EmptyClassroomInfoPayload,
 ) -> CarouselComponent:
     """빈 강의실 상세 정보를 카드 형식으로 변환합니다.
 

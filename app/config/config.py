@@ -9,11 +9,13 @@ import logging
 from dotenv import load_dotenv
 from pytz import timezone
 
+
 # 환경 변수 로딩
 load_dotenv()
 
-# 현재 파일이 위치한 디렉터리 (config 폴더의 절대 경로)
 CONFIG_DIR = os.path.dirname(__file__)
+DEFAULT_CACHE_DIR = os.path.abspath(os.path.join(CONFIG_DIR, "..", "..", ".cache"))
+CACHE_DIR = os.getenv("CACHE_DIR", DEFAULT_CACHE_DIR)
 
 # 로깅 설정
 logger = logging.getLogger("sandol_kakao_bot_service")
@@ -32,7 +34,7 @@ logger.addHandler(console_handler)
 
 
 class Config:
-    """FastAPI 설정 값을 관리하는 클래스
+    """FastAPI 설정 값을 관리하는 클래스입니다.
 
     이 클래스는 환경 변수에서 설정 값을 로드하고, 기본 값을 제공합니다.
     또한, meal_types.json 파일에서 식사 유형을 불러오는 기능도 포함되어 있습니다.
@@ -41,6 +43,11 @@ class Config:
     debug = os.getenv("DEBUG", "False").lower() == "true"
 
     SERVICE_ID: str = os.getenv("SERVICE_ID", "4")
+    SERVICE_ACCOUNT_SUB: str | None = os.getenv("SERVICE_ACCOUNT_SUB")
+    SERVICE_ACCOUNT_TOKEN: str | None = os.getenv("SERVICE_ACCOUNT_TOKEN")
+    SERVICE_ACCOUNT_TOKEN_TYPE: str = os.getenv("SERVICE_ACCOUNT_TOKEN_TYPE", "Bearer")
+
+    BASE_URL = os.getenv("BASE_URL", "https://sandol.sio2.kr/kakao-bot").rstrip("/")
 
     DATABASE_URL = os.getenv(
         "DATABASE_URL", "sqlite+aiosqlite:///./kakao_bot_service.db"
@@ -61,12 +68,43 @@ class Config:
         "CLASSROOM_TIMETABLE_SERVICE_URL",
         "http://classroom-timetable-service:80/classroom-timetable",
     ).rstrip("/")
+    AUTH_RELAY_URL = os.getenv("AUTH_RELAY_URL", "http://auth-relay:8000/relay").rstrip(
+        "/"
+    )
+    LOGIN_CALLBACK_URL = os.getenv("LOGIN_CALLBACK_URL", f"{BASE_URL}/users/callback")
+    LOGIN_REDIRECT_AFTER = os.getenv("LOGIN_REDIRECT_AFTER")
+
+    KC_SERVER_URL = (
+        os.getenv("KC_SERVER_URL", "https://sandol.sio2.kr/auth/").rstrip("/") + "/"
+    )
+    KC_CLIENT_ID = os.getenv("KC_CLIENT_ID", "sandol-kakao-bot")
+    KC_REALM = os.getenv("KC_REALM", "Sandori")
+    KC_CLIENT_SECRET = os.getenv("KC_CLIENT_SECRET")
 
     TIMEZONE = os.getenv("TIMEZONE", "Asia/Seoul")
     TZ = timezone(TIMEZONE)
 
+    TOKEN_ENCRYPTION_KEY = os.getenv("TOKEN_ENCRYPTION_KEY")
+
+    RELAY_CLIENT_SECRETS = os.getenv("RELAY_CLIENT_SECRETS", "")
+    NONCE_TTL_SECONDS = int(os.getenv("NONCE_TTL_SECONDS", "300"))
+
+    @classmethod
+    def _validate(cls) -> None:
+        if not cls.TOKEN_ENCRYPTION_KEY:
+            raise RuntimeError("TOKEN_ENCRYPTION_KEY environment variable must be set.")
+        if not cls.debug and not cls.KC_CLIENT_SECRET:
+            raise RuntimeError(
+                "KC_CLIENT_SECRET environment variable must be set when DEBUG is false."
+            )
+        if not cls.debug and not cls.RELAY_CLIENT_SECRETS:
+            raise RuntimeError(
+                "RELAY_CLIENT_SECRETS environment variable must be set and non-empty "
+                "when DEBUG is false."
+            )
+
     class HttpStatus:
-        """HTTP 상태 코드를 정의하는 클래스"""
+        """HTTP 상태 코드를 정의하는 클래스입니다."""
 
         OK = 200
         CREATED = 201
@@ -77,3 +115,7 @@ class Config:
         NOT_FOUND = 404
         CONFLICT = 409
         INTERNAL_SERVER_ERROR = 500
+        BAD_GATEWAY = 502
+
+
+Config._validate()

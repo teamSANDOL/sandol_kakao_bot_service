@@ -1,4 +1,4 @@
-"""DB의 meal_type 테이블을 meal_types.json과 동기화"""
+"""DB의 meal_type 테이블을 meal_types.json과 동기화."""
 
 import traceback
 
@@ -11,7 +11,7 @@ from app.models.users import User
 
 
 async def set_service_account():
-    """서비스 계정 설정
+    """서비스 계정 설정.
 
     서비스 계정이 설정되어 있지 않은 경우, 기본 서비스 계정을 설정합니다.
     """

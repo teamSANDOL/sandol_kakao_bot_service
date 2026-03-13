@@ -1,3 +1,5 @@
+"""Kakao OpenBuilder payload 예시를 위한 OpenAPI 확장 스키마 생성 유틸입니다."""
+
 from typing import Optional, Dict, List
 
 
@@ -7,7 +9,7 @@ def create_openapi_extra(
     contexts: Optional[List] = None,
     utterance: Optional[str] = None,
 ) -> Dict:
-    """detail_params, client_extra, contexts를 받아
+    """detail_params, client_extra, contexts를 받아.
 
     OpenAPI 스키마에 맞게 변환하며, 각각을 default로 설정한다.
 

@@ -1,3 +1,5 @@
+"""식단 응답 조합, 컨텍스트 저장, 식당 선택 관련 유틸 함수 모음입니다."""
+
 from collections.abc import Sequence
 import json
 import re
@@ -20,9 +22,8 @@ from app.config.blocks import get_cafeteria_register_quick_replies
 from app.models.users import User
 from app.schemas.meals import MealCard, RestaurantResponse, TimeRange
 from app.services.meal_service import fetch_my_restaurants
+from app.services.user_service import get_current_user, get_xuser_client_by_payload
 from app.utils import get_korean_day
-from app.utils.auth_client import get_xuser_client_by_payload
-from app.utils.user import get_current_user
 from app.utils.http import XUserIDClient
 from app.utils.kakao import KakaoError, parse_payload
 
@@ -214,7 +215,7 @@ def save_menu(
     meal_type_name: str,
     restaurant_name: str,
     menu_list: list,
-    lifspan: int = 5,
+    lifespan: int = 5,
     ttl: int = 300,
     add_mode: bool = False,
 ) -> list[Context]:
@@ -225,7 +226,7 @@ def save_menu(
         meal_type_name (str): 식사 종류 이름입니다.
         restaurant_name (str): 식당 이름입니다.
         menu_list (list): 저장할 메뉴 리스트입니다.
-        lifspan (int, optional): 컨텍스트의 생명주기입니다. 기본값은 5입니다.
+        lifespan (int, optional): 컨텍스트의 생명주기입니다. 기본값은 5입니다.
         ttl (int, optional): 컨텍스트의 TTL입니다. 기본값은 300입니다.
         add_mode (bool, optional): 메뉴 추가 모드 여부입니다. 기본값은 False입니다.
         만약 True인 경우 기존 메뉴에 추가됩니다.
@@ -252,7 +253,7 @@ def save_menu(
                 "menu_list": ContextParam(menu_str, menu_str),
                 "restaurant_name": ContextParam(restaurant_name, restaurant_name),
             },
-            lifespan=lifspan,
+            lifespan=lifespan,
             ttl=ttl,
         )
         contexts.append(new_context)
@@ -326,7 +327,7 @@ async def get_my_restaurants(
     user: Annotated[User, Depends(get_current_user)],
     client: Annotated[XUserIDClient, Depends(get_xuser_client_by_payload)],
 ) -> list[RestaurantResponse]:
-    """DI에 의존하는 식당 정보를 가져오는 함수
+    """DI에 의존하는 식당 정보를 가져오는 함수.
 
     Args:
         user (User): 현재 사용자
@@ -334,7 +335,7 @@ async def get_my_restaurants(
     Returns:
         list[RestaurantResponse]: 사용자의 식당 정보 리스트
     """
-    return await fetch_my_restaurants(user.id, client)
+    return await fetch_my_restaurants(user.keycloak_id, client)
 
 
 async def select_restaurant(
@@ -377,8 +378,14 @@ async def select_restaurant(
     if len(restaurants) == 1:
         return restaurants[0]
 
-    response = KakaoResponse()
+    logger.info(
+        "사용자에게 식당 선택을 요청합니다.\n식당 목록: %s",
+        [restaurant.name for restaurant in restaurants],
+    )
 
+    response = KakaoResponse()
+    if payload.flow is None:
+        raise KakaoError(response)
     text_card = TextCardComponent(
         title="식당 선택",
         description="식당을 선택하세요.",

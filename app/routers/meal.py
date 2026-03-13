@@ -10,9 +10,8 @@ from typing import Annotated, List, Literal
 from datetime import datetime, timedelta
 
 from fastapi import Depends, APIRouter
-from fastapi.responses import JSONResponse
 
-from httpx import HTTPStatusError
+from httpx import AsyncClient, HTTPStatusError
 from kakao_chatbot import Payload
 from kakao_chatbot.context import Context
 from kakao_chatbot.response import KakaoResponse, QuickReply, ActionEnum
@@ -33,11 +32,13 @@ from app.services.meal_service import (
     fetch_restaurant_by_name,
     post_meal,
 )
-from app.utils.auth_client import get_xuser_client_by_payload
-from app.utils.user import get_current_user
-from app.utils.http import XUserIDClient
+from app.services.user_service import get_xuser_client_by_payload, get_current_user
+from app.utils.http import XUserIDClient, get_async_client
 from app.utils import create_openapi_extra
-from app.utils.kakao import parse_payload
+from app.utils.kakao import (
+    parse_payload,
+    extract_text_value,
+)
 from app.utils.meal import (
     establishment_type_to_string,
     extract_menu,
@@ -67,8 +68,8 @@ meal_router = APIRouter(prefix="/meal")
 )
 async def meal_view(
     payload: Annotated[Payload, Depends(parse_payload)],
-    client: Annotated[XUserIDClient, Depends(get_xuser_client_by_payload)],
-) -> JSONResponse:
+    client: Annotated[AsyncClient, Depends(get_async_client)],
+) -> dict:
     """식단 정보를 Carousel TextCard 형태로 반환합니다.
 
     등록된 식당 정보를 불러와 어제 7시 이후 등록된 식당 정보를 먼저 배치합니다.
@@ -100,7 +101,7 @@ async def meal_view(
 
     # payload에서 Cafeteria 값 추출
     cafeteria = payload.action.detail_params.get("Cafeteria")  # 학식 이름
-    target_cafeteria = getattr(cafeteria, "value", None)
+    target_cafeteria = extract_text_value(getattr(cafeteria, "value", None))
 
     # 식단 정보를 가져옵니다.
     meal_list = await fetch_latest_meals(client)
@@ -188,7 +189,7 @@ async def meal_view(
             inserted_restaurant.add(meal.restaurant_name)
 
     logger.info("식단 정보 조회 완료: kakao_id=%s", payload.user_request.user.id)
-    return JSONResponse(response.get_dict())
+    return response.get_dict()
 
 
 @meal_router.post(
@@ -202,8 +203,8 @@ async def meal_view(
 async def meal_restaurant(
     payload: Annotated[Payload, Depends(parse_payload)],
     user: Annotated[User, Depends(get_current_user)],
-    client: Annotated[XUserIDClient, Depends(get_xuser_client_by_payload)],
-) -> JSONResponse:
+    client: Annotated[AsyncClient, Depends(get_async_client)],
+) -> dict:
     """식당 정보를 반환하는 API입니다.
 
     식당의 운영시간, 위치, 가격 등의 정보를 반환합니다.
@@ -225,7 +226,18 @@ async def meal_restaurant(
         str: 식당 정보를 반환합니다.
     """
     logger.info("식당 정보 조회 요청 수신: kakao_id=%s", payload.user_id)
-    restaurant_name: str = payload.action.client_extra["restaurant_name"]
+    restaurant_name = extract_text_value(
+        payload.action.client_extra.get("restaurant_name")
+    )
+    if not restaurant_name:
+        logger.warning(
+            "식당 정보 조회 실패: kakao_id=%s, restaurant_name=None", payload.user_id
+        )
+        return (
+            KakaoResponse()
+            .add_component(SimpleTextComponent("식당 이름을 확인해주세요."))
+            .get_dict()
+        )
 
     # 식당 정보를 가져옵니다.
     result = await fetch_restaurant_by_name(restaurant_name, client)
@@ -235,7 +247,7 @@ async def meal_restaurant(
             payload.user_id,
             restaurant_name,
         )
-        return JSONResponse(
+        return (
             KakaoResponse()
             .add_component(SimpleTextComponent("식당 정보를 찾을 수 없습니다."))
             .get_dict()
@@ -274,7 +286,7 @@ async def meal_restaurant(
         restaurant_name,
     )
 
-    return JSONResponse(response.get_dict())
+    return response.get_dict()
 
 
 @meal_router.post(
@@ -293,7 +305,7 @@ async def meal_delete(
         RestaurantResponse,
         Depends(select_restaurant),
     ],
-) -> JSONResponse:
+) -> dict:
     """삭제할 메뉴를 선택하는 API입니다.
 
     meal_type에 해당하는 식사 종류의 메뉴를 삭제할 수 있도록
@@ -337,7 +349,7 @@ async def meal_delete(
             meal_type,
             [ctx.name for ctx in payload.contexts],
         )
-        return JSONResponse(
+        return (
             KakaoResponse()
             .add_component(SimpleTextComponent("삭제할 메뉴가 없습니다."))
             .get_dict()
@@ -364,7 +376,7 @@ async def meal_delete(
         payload.user_id,
         meal_type,
     )
-    return JSONResponse(response.get_dict())
+    return response.get_dict()
 
 
 @meal_router.post(
@@ -383,7 +395,7 @@ async def meal_delete_all(
         RestaurantResponse,
         Depends(select_restaurant),
     ],
-) -> JSONResponse:
+) -> dict:
     """모든 메뉴를 삭제하는 API입니다.
 
     모든 메뉴를 삭제하고 삭제된 결과를 응답으로 반환합니다.
@@ -409,7 +421,7 @@ async def meal_delete_all(
         "lunch_menu",
         restaurant.name,
         [],
-        lifspan=0,
+        lifespan=0,
         ttl=0,
     )
     contexts = save_menu(
@@ -417,7 +429,7 @@ async def meal_delete_all(
         "dinner_menu",
         restaurant.name,
         [],
-        lifspan=0,
+        lifespan=0,
         ttl=0,
     )
     lunch, dinner = make_meal_cards([], [])
@@ -425,7 +437,7 @@ async def meal_delete_all(
     response.add_component(SimpleTextComponent("모든 메뉴가 삭제되었습니다."))
     response.contexts = contexts
     logger.info("모든 메뉴 삭제 완료: user_id=%s", payload.user_id)
-    return JSONResponse(response.get_dict())
+    return response.get_dict()
 
 
 @meal_router.post(
@@ -445,7 +457,7 @@ async def meal_menu_delete(
         RestaurantResponse,
         Depends(select_restaurant),
     ],
-) -> JSONResponse:
+) -> dict:
     """선택한 메뉴를 삭제하는 API입니다.
 
     meal_delete API에서 선택한 메뉴를 삭제합니다.
@@ -477,9 +489,7 @@ async def meal_menu_delete(
             "메뉴 삭제 실패: user_id=%s, meal_type=None, menu=None",
             payload.user_id,
         )
-        return JSONResponse(
-            meal_error_response_maker("삭제할 메뉴를 입력해주세요.").get_dict()
-        )
+        return meal_error_response_maker("삭제할 메뉴를 입력해주세요.").get_dict()
 
     contexts: List[Context] = deepcopy(payload.contexts)
     menu_list = extract_menu(contexts, f"{meal_type}_menu", restaurant.name)
@@ -498,9 +508,7 @@ async def meal_menu_delete(
             menu,
             menu_list,
         )
-        return JSONResponse(
-            meal_error_response_maker("등록되지 않은 메뉴입니다.").get_dict()
-        )
+        return meal_error_response_maker("등록되지 않은 메뉴입니다.").get_dict()
 
     menu_list.remove(menu)
     contexts = save_menu(
@@ -540,7 +548,7 @@ async def meal_menu_delete(
         meal_type,
         menu,
     )
-    return JSONResponse(response.get_dict())
+    return response.get_dict()
 
 
 @meal_router.post(
@@ -565,7 +573,7 @@ async def meal_register(
         RestaurantResponse,
         Depends(select_restaurant),
     ],
-) -> JSONResponse:
+) -> dict:
     """식단 정보를 등록합니다.
 
     중식 등록 및 석식 등록 스킬을 처리합니다.
@@ -607,22 +615,24 @@ async def meal_register(
         "식단 등록 요청 수신: user_id=%s, meal_type=%s", payload.user_id, meal_type
     )
 
-    if (
-        payload.action.detail_params is None
-        or not payload.detail_params
-        or "menu" not in payload.detail_params.keys()
-    ):
+    menu_text = extract_text_value(
+        payload.action.detail_params.get("menu")
+        if payload.action.detail_params
+        else None
+    )
+    if not menu_text:
         logger.error(
             "식단 등록 실패: user_id=%s, meal_type=%s, menu=None",
             payload.user_id,
             meal_type,
         )
-        return JSONResponse(
+        return (
             KakaoResponse()
             .add_component(SimpleTextComponent("메뉴를 입력해주세요."))
             .get_dict()
         )
-    menu_list = split_string(payload.detail_params["menu"].origin)
+
+    menu_list = split_string(menu_text)
 
     logger.debug(
         "식단 등록 메뉴 리스트 생성: user_id=%s, meal_type=%s, menu_list=%s",
@@ -654,9 +664,7 @@ async def meal_register(
             meal_type,
             menu_list,
         )
-        return JSONResponse(
-            meal_error_response_maker("식사 종류를 확인해주세요.").get_dict()
-        )
+        return meal_error_response_maker("식사 종류를 확인해주세요.").get_dict()
     logger.debug(
         "식단 등록 완료: user_id=%s, meal_type=%s, menu_list=%s",
         payload.user_id,
@@ -683,17 +691,14 @@ async def meal_register(
 
     logger.info("식단 등록 완료: user_id=%s, meal_type=%s", payload.user_id, meal_type)
     for ctx in contexts:
+        menu_list_param = ctx.params.get("menu_list")
         logger.debug(
             "등록된 %s 식단 menu: %s",
             ctx.name,
-            (
-                ctx.params.get("menu_list").value
-                if ctx.params.get("menu_list")
-                else None
-            ),
+            menu_list_param.value if menu_list_param is not None else None,
         )
     logger.debug("등록된 식당 이름: restaurant_name: %s", restaurant.name)
-    return JSONResponse(response.get_dict())
+    return response.get_dict()
 
 
 @meal_router.post(
@@ -706,8 +711,8 @@ async def meal_register(
 )
 async def meal_submit(
     payload: Annotated[Payload, Depends(parse_payload)],
-    client: Annotated[XUserIDClient, Depends(get_xuser_client_by_payload)],
     user: Annotated[User, Depends(get_current_user)],
+    client: Annotated[XUserIDClient, Depends(get_xuser_client_by_payload)],
     restaurant: Annotated[
         RestaurantResponse,
         Depends(select_restaurant),
@@ -764,7 +769,7 @@ async def meal_submit(
                 errors.append(f"{meal_type.value} 등록 중 알 수 없는 오류 발생")
 
     if errors:
-        return JSONResponse(
+        return (
             KakaoResponse()
             .add_component(
                 SimpleTextComponent("\n".join(errors) + "\n확인 후 다시 시도해주세요.")
@@ -791,7 +796,7 @@ async def meal_submit(
         "lunch_menu",
         restaurant.name,
         [],
-        lifspan=0,
+        lifespan=0,
         ttl=0,
     )
     contexts = save_menu(
@@ -799,7 +804,7 @@ async def meal_submit(
         "dinner_menu",
         restaurant.name,
         [],
-        lifspan=0,
+        lifespan=0,
         ttl=0,
     )
     response.contexts = contexts
@@ -808,4 +813,4 @@ async def meal_submit(
         payload.user_id,
         restaurant.name,
     )
-    return JSONResponse(response.get_dict())
+    return response.get_dict()

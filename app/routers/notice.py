@@ -6,11 +6,9 @@
 import asyncio
 from typing import Annotated
 from fastapi import APIRouter, Depends
-from fastapi.responses import JSONResponse
+from httpx import AsyncClient
 from kakao_chatbot import Payload
-from kakao_chatbot.response import (
-    KakaoResponse,
-)
+from kakao_chatbot.response import KakaoResponse
 from kakao_chatbot.response.components import (
     SimpleTextComponent,
 )
@@ -23,9 +21,8 @@ from app.services.notice_service import (
     get_notice_list,
 )
 from app.utils import create_openapi_extra
-from app.utils.auth_client import get_service_xuser_client
-from app.utils.http import XUserIDClient
-from app.utils.kakao import parse_payload
+from app.utils.http import get_async_client
+from app.utils.kakao import parse_payload, extract_text_value
 from app.utils.notice import make_notice_component
 
 notice_router = APIRouter(prefix="/notice")
@@ -45,7 +42,7 @@ notice_router = APIRouter(prefix="/notice")
 )
 async def notice_list(
     payload: Annotated[Payload, Depends(parse_payload)],
-    client: Annotated[XUserIDClient, Depends(get_service_xuser_client)],
+    client: Annotated[AsyncClient, Depends(get_async_client)],
 ):
     """공지사항 목록을 가져옵니다.
 
@@ -68,7 +65,8 @@ async def notice_list(
     Returns:
         JSONResponse: 공지사항 목록
     """
-    org = payload.action.params.get("organization", None)
+    org_raw = payload.action.params.get("organization", None)
+    org = extract_text_value(org_raw) if org_raw is not None else None
     notice_list: list[Notice] = []
     dorm_notice_list: list[Notice] = []
     if org is None:
@@ -89,30 +87,20 @@ async def notice_list(
             get_notice_by_author(client=client, author=org, is_dormitory=True),
         )
 
-    response = KakaoResponse()
+    components = []
 
     if notice_list:
-        response.add_component(
+        components.append(
             make_notice_component(
                 notice_list, is_author=(bool(org) and org != "생활관")
             )
         )
 
     if dorm_notice_list:
-        response.add_component(
-            make_notice_component(dorm_notice_list, is_dormitory=True)
-        )
+        components.append(make_notice_component(dorm_notice_list, is_dormitory=True))
 
     if not notice_list and not dorm_notice_list:
-        return JSONResponse(
-            content=KakaoResponse(
-                component_list=[
-                    SimpleTextComponent(text="공지사항이 없습니다."),
-                ]
-            ).get_dict(),
-            status_code=200,
-        )
-    return JSONResponse(
-        content=response.get_dict(),
-        status_code=200,
-    )
+        return KakaoResponse(
+            component_list=[SimpleTextComponent(text="공지사항이 없습니다.")]
+        ).get_dict()
+    return KakaoResponse(component_list=components).get_dict()
