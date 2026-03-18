@@ -39,7 +39,7 @@ class KakaoError(Exception):
         return KakaoResponse().add_component(SimpleTextComponent(self.message))
 
 
-class NotAuthorizedError(Exception):
+class NotAuthenticated(Exception):
     """사용자 로그인(등록) 과정이 진행되지 않아 발생하는 에러입니다."""
 
     def __init__(self, *args, **kwargs):

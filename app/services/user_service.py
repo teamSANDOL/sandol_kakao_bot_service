@@ -29,7 +29,7 @@ from app.utils.http import XUserIDClient
 from app.utils.kakao import (
     KakaoError,
     LoginRequiredError,
-    NotAuthorizedError,
+    NotAuthenticated,
     parse_payload,
 )
 from app.utils.security import decrypt_token, encrypt_token
@@ -215,7 +215,7 @@ async def get_user(
         user = result.scalar_one_or_none()
 
     if not user:
-        raise NotAuthorizedError()
+        raise NotAuthenticated()
 
     if (
         user.kakao_id != kakao_id
