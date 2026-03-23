@@ -7,7 +7,7 @@ import jwt
 from fastapi import Depends, Header, HTTPException
 from httpx import AsyncClient
 from keycloak import KeycloakError
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.dialects.postgresql import Insert as PGInsert
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,6 +30,7 @@ from app.utils.kakao import (
     KakaoError,
     LoginRequiredError,
     NotAuthenticated,
+    UserIdentityConflictError,
     parse_payload,
 )
 from app.utils.security import decrypt_token, encrypt_token
@@ -191,6 +192,42 @@ async def get_keycloak_id_by_kakao_id(
     return result.scalar_one_or_none()
 
 
+async def find_user(
+    db: AsyncSession,
+    kakao_id: str,
+    *,
+    plusfriend_user_key: str | None = None,
+    app_user_id: str | None = None,
+) -> User | None:
+    """주어진 식별자들로 사용자를 1회 조회하고 충돌 여부를 판별합니다."""
+    conditions = [User.kakao_id == kakao_id]
+
+    if plusfriend_user_key:
+        conditions.append(User.plusfriend_user_key == plusfriend_user_key)
+
+    if app_user_id:
+        conditions.append(User.app_user_id == app_user_id)
+
+    result = await db.execute(
+        select(User).where(or_(*conditions))
+    )
+    users = result.scalars().all()
+
+    if not users:
+        return None
+
+    # 서로 다른 user가 2명 이상 나오면 충돌
+    unique_user_ids = {user.id for user in users}
+    if len(unique_user_ids) > 1:
+        raise UserIdentityConflictError(
+            message=(
+                "사용자 정보가 충돌 상태입니다. 관리자에게 문의해주세요."
+            )
+        )
+
+    return users[0]
+
+
 async def get_user(
     kakao_id: str,
     db: AsyncSession,
@@ -198,21 +235,12 @@ async def get_user(
     app_user_id: str | None = None,
 ) -> User:
     """사용자를 우선순위에 따라 조회합니다."""
-    user = None
-
-    if plusfriend_user_key:
-        result = await db.execute(
-            select(User).where(User.plusfriend_user_key == plusfriend_user_key)
-        )
-        user = result.scalar_one_or_none()
-
-    if not user and app_user_id:
-        result = await db.execute(select(User).where(User.app_user_id == app_user_id))
-        user = result.scalar_one_or_none()
-
-    if not user:
-        result = await db.execute(select(User).where(User.kakao_id == kakao_id))
-        user = result.scalar_one_or_none()
+    user = await find_user(
+        db=db,
+        kakao_id=kakao_id,
+        plusfriend_user_key=plusfriend_user_key,
+        app_user_id=app_user_id,
+    )
 
     if not user:
         raise NotAuthenticated()
