@@ -43,6 +43,10 @@ def make_callback_payload(**overrides: object) -> LoginCallbackReq:
     return LoginCallbackReq.model_validate(payload)
 
 
+def signed_headers(payload: LoginCallbackReq) -> dict[str, str]:
+    return {"X-Relay-Signature": sign_payload(payload, Config.RELAY_CLIENT_SECRETS)}
+
+
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     app = FastAPI()
@@ -53,7 +57,9 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
     async def fake_map_keycloak_user(**_: object) -> SimpleNamespace:
         return SimpleNamespace(
-            id=1, kakao_id="kakao-user-1", keycloak_id="keycloak-sub-1"
+            id=1,
+            kakao_id="kakao-user-1",
+            keycloak_id="keycloak-sub-1",
         )
 
     app.dependency_overrides[get_db] = fake_get_db
@@ -67,9 +73,7 @@ def test_login_callback_returns_ok_for_valid_callback(client: TestClient) -> Non
     response = client.post(
         "/users/callback",
         json=payload.model_dump(mode="json"),
-        headers={
-            "X-Relay-Signature": sign_payload(payload, Config.RELAY_CLIENT_SECRETS)
-        },
+        headers=signed_headers(payload),
     )
 
     assert response.status_code == 200
@@ -82,10 +86,107 @@ def test_login_callback_rejects_invalid_callback_audience(client: TestClient) ->
     response = client.post(
         "/users/callback",
         json=payload.model_dump(mode="json"),
-        headers={
-            "X-Relay-Signature": sign_payload(payload, Config.RELAY_CLIENT_SECRETS)
-        },
+        headers=signed_headers(payload),
     )
 
     assert response.status_code == 401
     assert response.json()["detail"] == "invalid_callback_audience"
+
+
+def test_login_callback_rejects_invalid_callback_signature(client: TestClient) -> None:
+    payload = make_callback_payload()
+
+    response = client.post(
+        "/users/callback",
+        json=payload.model_dump(mode="json"),
+        headers={"X-Relay-Signature": "wrong-signature"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid X-Relay-Signature header"
+
+
+def test_login_callback_rejects_missing_signature(client: TestClient) -> None:
+    payload = make_callback_payload()
+
+    response = client.post(
+        "/users/callback",
+        json=payload.model_dump(mode="json"),
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Missing X-Relay-Signature header"
+
+
+def test_login_callback_rejects_stale_timestamp(client: TestClient) -> None:
+    payload = make_callback_payload(ts=int(time.time()) - (Config.NONCE_TTL_SECONDS + 60))
+
+    response = client.post(
+        "/users/callback",
+        json=payload.model_dump(mode="json"),
+        headers=signed_headers(payload),
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Timestamp is out of acceptable range"
+
+
+def test_login_callback_rejects_reused_nonce(client: TestClient) -> None:
+    payload = make_callback_payload(nonce="replay-nonce")
+
+    first = client.post(
+        "/users/callback",
+        json=payload.model_dump(mode="json"),
+        headers=signed_headers(payload),
+    )
+    second = client.post(
+        "/users/callback",
+        json=payload.model_dump(mode="json"),
+        headers=signed_headers(payload),
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 400
+    assert second.json()["detail"] == "reused_nonce"
+
+
+def test_login_callback_rejects_missing_required_tokens(client: TestClient) -> None:
+    payload = make_callback_payload(relay_access_token="", offline_refresh_token="")
+
+    response = client.post(
+        "/users/callback",
+        json=payload.model_dump(mode="json"),
+        headers=signed_headers(payload),
+    )
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == (
+        "Login callback payload is missing required tokens. "
+        "Check Auth Relay / offline_access configuration."
+    )
+
+
+def test_login_callback_rejects_missing_nonce(client: TestClient) -> None:
+    payload = make_callback_payload(nonce="")
+
+    response = client.post(
+        "/users/callback",
+        json=payload.model_dump(mode="json"),
+        headers=signed_headers(payload),
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "missing_nonce"
+
+
+def test_login_callback_rejects_invalid_callback_client_key(client: TestClient) -> None:
+    payload = make_callback_payload(client_key="other-client")
+
+    response = client.post(
+        "/users/callback",
+        json=payload.model_dump(mode="json"),
+        headers=signed_headers(payload),
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid_callback_client_key"

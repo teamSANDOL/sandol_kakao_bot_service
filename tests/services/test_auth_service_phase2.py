@@ -9,6 +9,7 @@ from app.schemas.auth import LoginCallbackReq
 from app.services.auth_service import (
     extract_keycloak_sub,
     validate_login_callback_claims,
+    verify_timestamp,
 )
 
 
@@ -55,6 +56,20 @@ def test_validate_login_callback_claims_rejects_invalid_issuer() -> None:
 def test_validate_login_callback_claims_rejects_invalid_audience() -> None:
     with pytest.raises(HTTPException, match="invalid_callback_audience"):
         validate_login_callback_claims(make_callback_payload(aud="other-client"))
+
+
+def test_validate_login_callback_claims_rejects_invalid_client_key() -> None:
+    with pytest.raises(HTTPException, match="invalid_callback_client_key"):
+        validate_login_callback_claims(make_callback_payload(client_key="other-client"))
+
+
+def test_verify_timestamp_accepts_within_tolerance() -> None:
+    verify_timestamp(int(time.time()))
+
+
+def test_verify_timestamp_rejects_stale_value() -> None:
+    with pytest.raises(HTTPException, match="Timestamp is out of acceptable range"):
+        verify_timestamp(int(time.time()) - (Config.NONCE_TTL_SECONDS + 10))
 
 
 def test_extract_keycloak_sub_returns_expected_sub() -> None:
