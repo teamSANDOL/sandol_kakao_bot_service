@@ -179,12 +179,12 @@ def extract_keycloak_sub(decrypted_access_token: str) -> str:
         client_matches = audience_matches(aud_claim, Config.KC_CLIENT_ID)
 
     if not client_matches:
-        logger.debug(
-            "Access token client claims do not match expected client_id: azp=%s aud=%s (expected %s)",
-            azp_claim,
-            aud_claim,
-            Config.KC_CLIENT_ID,
-        )
+        # logger.debug(
+        #     "Access token client claims do not match expected client_id: azp=%s aud=%s (expected %s)",
+        #     azp_claim,
+        #     aud_claim,
+        #     Config.KC_CLIENT_ID,
+        # )
         raise HTTPException(
             status_code=Config.HttpStatus.UNAUTHORIZED,
             detail="invalid_access_token_audience",
@@ -192,10 +192,9 @@ def extract_keycloak_sub(decrypted_access_token: str) -> str:
 
     keycloak_sub = token_payload.get("sub")
     if not isinstance(keycloak_sub, str) or not keycloak_sub:
-        # TODO: 배포시 삭제
-        logger.debug(
-            "Access token missing valid 'sub' claim: %s", token_payload
-        )
+        # logger.debug(
+        #     "Access token missing valid 'sub' claim: %s", token_payload
+        # )
         raise HTTPException(
             status_code=Config.HttpStatus.UNAUTHORIZED,
             detail="missing_access_token_sub",
