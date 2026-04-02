@@ -29,6 +29,7 @@ from app.services.user_service import (
     find_user,
     get_current_user,
     get_user_info,
+    has_active_login_session,
 )
 from app.utils.db import get_db
 from app.utils.http import get_async_client
@@ -56,12 +57,13 @@ async def get_login_link(
         plusfriend_user_key = payload.user_request.user.properties.plusfriend_user_key
         app_user_id = payload.user_request.user.properties.app_user_id
 
-    if await find_user(
-            db,
-            kakao_id=kakao_id,
-            plusfriend_user_key=plusfriend_user_key,
-            app_user_id=app_user_id,
-            ):
+    existing_user = await find_user(
+        db,
+        kakao_id=kakao_id,
+        plusfriend_user_key=plusfriend_user_key,
+        app_user_id=app_user_id,
+    )
+    if existing_user and has_active_login_session(existing_user):
         raise KakaoError(message="이미 로그인된 사용자입니다.")
     login_link_response: IssueLinkRes = await generate_login_link(payload, client)
     response: KakaoResponse = await make_login_link_response(login_link_response)
