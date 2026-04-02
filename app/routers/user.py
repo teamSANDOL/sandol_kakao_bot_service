@@ -21,6 +21,7 @@ from app.services.auth_service import (
     generate_login_link,
     extract_keycloak_sub,
     mark_nonce_once,
+    validate_login_callback_claims,
     verify_relay_signature,
     verify_timestamp,
     map_keycloak_user,
@@ -107,6 +108,8 @@ async def login_callback(
                     "Check Auth Relay / offline_access configuration."
                 ),
             )
+
+        validate_login_callback_claims(data)
 
         logger.info(
             "Login callback tokens extracted successfully: "
