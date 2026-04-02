@@ -43,6 +43,22 @@ def _normalize_to_utc(dt: datetime) -> datetime:
     return dt.astimezone(timezone.utc)
 
 
+def has_active_login_session(user: User) -> bool:
+    if not user.keycloak_id or not user.refresh_token or not user.refresh_token_expires_at:
+        return False
+
+    refresh_expires_at = _normalize_to_utc(user.refresh_token_expires_at)
+    if refresh_expires_at <= datetime.now(timezone.utc):
+        return False
+
+    try:
+        decrypt_token(user.refresh_token)
+    except (ValueError, RuntimeError):
+        return False
+
+    return True
+
+
 async def _perform_token_refresh(user: User, db: AsyncSession) -> str:
     """Refresh Token을 사용해 Keycloak Access Token을 갱신합니다.
 
@@ -93,9 +109,27 @@ async def _perform_token_refresh(user: User, db: AsyncSession) -> str:
             message='토큰 정보가 유효하지 않습니다. 아래 로그인 버튼 또는 "로그인"을 입력해 다시 로그인해주세요.'
         ) from exc
 
-    token_response = await request_token_refresh(
-        decrypted_refresh_token, keycloak_sub=user.keycloak_id
-    )
+    try:
+        token_response = await request_token_refresh(
+            decrypted_refresh_token, keycloak_sub=user.keycloak_id
+        )
+    except HTTPException as exc:
+        if exc.status_code != Config.HttpStatus.UNAUTHORIZED:
+            raise
+
+        logger.warning(
+            "Token refresh requires re-login for keycloak_sub=%s",
+            user.keycloak_id,
+        )
+        user.access_token = None
+        user.refresh_token = None
+        user.access_token_expires_at = None
+        user.refresh_token_expires_at = None
+        await db.commit()
+        await db.refresh(user)
+        raise LoginRequiredError(
+            message='로그인 세션이 만료되었습니다. 아래 로그인 버튼 또는 "로그인"을 입력해 다시 로그인해주세요.'
+        ) from exc
 
     try:
         new_access_token = token_response["access_token"]
