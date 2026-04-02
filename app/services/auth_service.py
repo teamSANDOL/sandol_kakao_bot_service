@@ -9,6 +9,7 @@ import time
 from datetime import datetime, timezone, timedelta
 
 import jwt
+from jwt import InvalidTokenError
 from diskcache import FanoutCache  # type: ignore[import-untyped]
 from pydantic import HttpUrl
 from fastapi import HTTPException
@@ -41,17 +42,17 @@ def get_keycloak_client() -> KeycloakOpenID:
     )
 
 
-def _canonical_json(data: dict[str, Any]) -> str:
+def canonical_json(data: dict[str, Any]) -> str:
     """HMAC 서명을 위한 정규화 JSON 문자열."""
     return json.dumps(data, separators=(",", ":"), sort_keys=True, ensure_ascii=False)
 
 
 def sign_payload(payload: LoginCallbackReq, secret: str) -> str:
     """HMAC-SHA256 서명 생성."""
-    canonical_json = _canonical_json(payload.model_dump())
+    canonical_payload = canonical_json(payload.model_dump())
     mac = hmac.new(
         secret.encode("utf-8"),
-        canonical_json.encode("utf-8"),
+        canonical_payload.encode("utf-8"),
         hashlib.sha256,
     )
     return base64.urlsafe_b64encode(mac.digest()).decode().rstrip("=")
@@ -99,24 +100,105 @@ def mark_nonce_once(nonce: str) -> None:
         raise HTTPException(status_code=400, detail="reused_nonce")
 
 
+def expected_keycloak_issuer() -> str:
+    return f"{Config.KC_SERVER_URL}realms/{Config.KC_REALM}"
+
+
+def audience_matches(aud_claim: Any, expected_aud: str) -> bool:
+    if isinstance(aud_claim, str):
+        return aud_claim == expected_aud
+    if isinstance(aud_claim, list):
+        return expected_aud in aud_claim
+    return False
+
+
+def validate_login_callback_claims(payload: LoginCallbackReq) -> None:
+    expected_issuer = expected_keycloak_issuer()
+
+    if payload.issuer != expected_issuer:
+        raise HTTPException(
+            status_code=Config.HttpStatus.UNAUTHORIZED,
+            detail="invalid_callback_issuer",
+        )
+    if payload.aud != Config.KC_CLIENT_ID:
+        raise HTTPException(
+            status_code=Config.HttpStatus.UNAUTHORIZED,
+            detail="invalid_callback_audience",
+        )
+    if payload.client_key != Config.KC_CLIENT_ID:
+        raise HTTPException(
+            status_code=Config.HttpStatus.UNAUTHORIZED,
+            detail="invalid_callback_client_key",
+        )
+
+
 def extract_keycloak_sub(decrypted_access_token: str) -> str:
     """Access Token에서 Keycloak `sub` 값을 추출합니다."""
     try:
         token_payload: dict = jwt.decode(
-            decrypted_access_token, options={"verify_signature": False}
+            decrypted_access_token,
+            options={
+                "verify_signature": False,
+                "verify_exp": False,
+                "verify_aud": False,
+                "verify_iss": False,
+            },
         )
-    except Exception as exc:
-        logger.error("Failed to decode access token: %s", exc)
+    except InvalidTokenError as exc:
         raise HTTPException(
-            status_code=Config.HttpStatus.INTERNAL_SERVER_ERROR,
-            detail="Invalid access token payload",
+            status_code=Config.HttpStatus.UNAUTHORIZED,
+            detail="invalid_access_token_payload",
         ) from exc
 
-    keycloak_sub = token_payload.get("sub")
-    if not keycloak_sub:
+    exp_claim = token_payload.get("exp")
+    if not isinstance(exp_claim, int):
         raise HTTPException(
-            status_code=Config.HttpStatus.INTERNAL_SERVER_ERROR,
-            detail="Sub (user ID) missing in JWT payload",
+            status_code=Config.HttpStatus.UNAUTHORIZED,
+            detail="invalid_access_token_exp",
+        )
+    if exp_claim <= int(time.time()):
+        raise HTTPException(
+            status_code=Config.HttpStatus.UNAUTHORIZED,
+            detail="expired_access_token",
+        )
+
+    issuer_claim = token_payload.get("iss")
+    if issuer_claim != expected_keycloak_issuer():
+        raise HTTPException(
+            status_code=Config.HttpStatus.UNAUTHORIZED,
+            detail="invalid_access_token_issuer",
+        )
+
+    azp_claim = token_payload.get("azp")
+    aud_claim = token_payload.get("aud")
+    client_matches = False
+
+    if isinstance(azp_claim, str):
+        client_matches = azp_claim == Config.KC_CLIENT_ID
+    else:
+        client_matches = audience_matches(aud_claim, Config.KC_CLIENT_ID)
+
+    if not client_matches:
+        logger.debug(
+            "Access token client claims do not match expected client_id: azp=%s aud=%s (expected %s)",
+            azp_claim,
+            aud_claim,
+            Config.KC_CLIENT_ID,
+        )
+        raise HTTPException(
+            status_code=Config.HttpStatus.UNAUTHORIZED,
+            detail="invalid_access_token_audience",
+        )
+
+    keycloak_sub = token_payload.get("sub")
+    if not isinstance(keycloak_sub, str) or not keycloak_sub:
+        # TODO: 배포시 삭제
+        logger.debug(
+            "Access token missing valid 'sub' claim: %s", token_payload
+        )
+        raise HTTPException(
+            status_code=Config.HttpStatus.UNAUTHORIZED,
+            detail="missing_access_token_sub",
         )
     return keycloak_sub
 
