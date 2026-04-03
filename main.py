@@ -24,7 +24,12 @@ from app.routers import (
 from app.config import Config, logger
 from app.database import init_db, async_engine
 from app.utils import error_message, parse_payload
-from app.utils.kakao import KakaoError, LoginRequiredError, NotAuthorizedError
+from app.utils.kakao import (
+    KakaoError,
+    LoginRequiredError,
+    NotAuthenticated,
+    UserIdentityConflictError,
+)
 
 
 @asynccontextmanager
@@ -92,7 +97,15 @@ async def http_exception_handler(request: Request, exc: Exception | HTTPExceptio
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"detail": "Internal Server Error"},
         )
-    if isinstance(exc, (KakaoError, LoginRequiredError, NotAuthorizedError)):
+    if isinstance(
+        exc,
+        (
+            KakaoError,
+            LoginRequiredError,
+            NotAuthenticated,
+            UserIdentityConflictError,
+        ),
+    ):
         return JSONResponse(exc.get_response().get_dict())
 
     # 예외 처리 시 로그 남기기

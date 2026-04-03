@@ -30,8 +30,10 @@ dev = [
     "ruff>=0.9,<0.10",
     "black>=25.1.0,<26",
     "mypy>=1.15.0,<2",
+    "pytest>=8.3.5",
     "types-cachetools>=5.5.0.20240820,<6",
     "types-pytz>=2025.1.0.20250204,<2026",
+    "pytest-asyncio>=1.3.0",
 ]
 
 [tool.uv]
@@ -95,3 +97,8 @@ indent-style = "space"
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["D", "S101", "PLR2004"]
+"tests/conftest.py" = ["E402"]
+"app/utils/kakao.py" = ["N818"]

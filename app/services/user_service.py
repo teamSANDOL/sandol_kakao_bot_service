@@ -7,7 +7,7 @@ import jwt
 from fastapi import Depends, Header, HTTPException
 from httpx import AsyncClient
 from keycloak import KeycloakError
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from kakao_chatbot import Payload
@@ -26,7 +26,8 @@ from app.utils.http import XUserIDClient
 from app.utils.kakao import (
     KakaoError,
     LoginRequiredError,
-    NotAuthorizedError,
+    NotAuthenticated,
+    UserIdentityConflictError,
     parse_payload,
 )
 from app.utils.security import decrypt_token, encrypt_token
@@ -37,6 +38,23 @@ def _normalize_to_utc(dt: datetime) -> datetime:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)
+
+
+def has_active_login_session(user: User) -> bool:
+    """저장된 refresh token 기준으로 재로그인 없이 사용 가능한 세션인지 확인합니다."""
+    if not user.keycloak_id or not user.refresh_token or not user.refresh_token_expires_at:
+        return False
+
+    refresh_expires_at = _normalize_to_utc(user.refresh_token_expires_at)
+    if refresh_expires_at <= datetime.now(timezone.utc):
+        return False
+
+    try:
+        decrypt_token(user.refresh_token)
+    except (ValueError, RuntimeError):
+        return False
+
+    return True
 
 
 async def _perform_token_refresh(user: User, db: AsyncSession) -> str:
@@ -89,9 +107,27 @@ async def _perform_token_refresh(user: User, db: AsyncSession) -> str:
             message='토큰 정보가 유효하지 않습니다. 아래 로그인 버튼 또는 "로그인"을 입력해 다시 로그인해주세요.'
         ) from exc
 
-    token_response = await request_token_refresh(
-        decrypted_refresh_token, keycloak_sub=user.keycloak_id
-    )
+    try:
+        token_response = await request_token_refresh(
+            decrypted_refresh_token, keycloak_sub=user.keycloak_id
+        )
+    except HTTPException as exc:
+        if exc.status_code != Config.HttpStatus.UNAUTHORIZED:
+            raise
+
+        logger.warning(
+            "Token refresh requires re-login for keycloak_sub=%s",
+            user.keycloak_id,
+        )
+        user.access_token = None
+        user.refresh_token = None
+        user.access_token_expires_at = None
+        user.refresh_token_expires_at = None
+        await db.commit()
+        await db.refresh(user)
+        raise LoginRequiredError(
+            message='로그인 세션이 만료되었습니다. 아래 로그인 버튼 또는 "로그인"을 입력해 다시 로그인해주세요.'
+        ) from exc
 
     try:
         new_access_token = token_response["access_token"]
@@ -188,31 +224,58 @@ async def get_keycloak_id_by_kakao_id(
     return result.scalar_one_or_none()
 
 
+async def find_user(
+    db: AsyncSession,
+    kakao_id: str,
+    *,
+    plusfriend_user_key: str | None = None,
+    app_user_id: str | None = None,
+) -> User | None:
+    """주어진 식별자들로 사용자를 1회 조회하고 충돌 여부를 판별합니다."""
+    conditions = [User.kakao_id == kakao_id]
+
+    if plusfriend_user_key:
+        conditions.append(User.plusfriend_user_key == plusfriend_user_key)
+
+    if app_user_id:
+        conditions.append(User.app_user_id == app_user_id)
+
+    result = await db.execute(
+        select(User).where(or_(*conditions))
+    )
+    users = result.scalars().all()
+
+    if not users:
+        return None
+
+    # 서로 다른 user가 2명 이상 나오면 충돌
+    unique_user_ids = {user.id for user in users}
+    if len(unique_user_ids) > 1:
+        raise UserIdentityConflictError(
+            message=(
+                "사용자 정보가 충돌 상태입니다. 관리자에게 문의해주세요."
+            )
+        )
+
+    return users[0]
+
+
 async def get_user(
     kakao_id: str,
     db: AsyncSession,
     plusfriend_user_key: str | None = None,
     app_user_id: str | None = None,
 ) -> User:
-    """사용자를 우선순위에 따라 조회합니다."""
-    user = None
-
-    if plusfriend_user_key:
-        result = await db.execute(
-            select(User).where(User.plusfriend_user_key == plusfriend_user_key)
-        )
-        user = result.scalar_one_or_none()
-
-    if not user and app_user_id:
-        result = await db.execute(select(User).where(User.app_user_id == app_user_id))
-        user = result.scalar_one_or_none()
+    """주어진 식별자들로 사용자를 조회하고 필요 시 식별자 값을 동기화합니다."""
+    user = await find_user(
+        db=db,
+        kakao_id=kakao_id,
+        plusfriend_user_key=plusfriend_user_key,
+        app_user_id=app_user_id,
+    )
 
     if not user:
-        result = await db.execute(select(User).where(User.kakao_id == kakao_id))
-        user = result.scalar_one_or_none()
-
-    if not user:
-        raise NotAuthorizedError()
+        raise NotAuthenticated()
 
     if (
         user.kakao_id != kakao_id

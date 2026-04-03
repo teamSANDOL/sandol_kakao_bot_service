@@ -21,17 +21,20 @@ from app.services.auth_service import (
     generate_login_link,
     extract_keycloak_sub,
     mark_nonce_once,
+    validate_login_callback_claims,
     verify_relay_signature,
     verify_timestamp,
     map_keycloak_user,
 )
 from app.services.user_service import (
+    find_user,
     get_current_user,
     get_user_info,
+    has_active_login_session,
 )
 from app.utils.db import get_db
 from app.utils.http import get_async_client
-from app.utils.kakao import parse_payload
+from app.utils.kakao import KakaoError, parse_payload
 from app.utils.user import (
     make_login_link_response,
     make_user_info_response,
@@ -44,8 +47,25 @@ user_router = APIRouter(prefix="/users", tags=["User"])
 async def get_login_link(
     payload: Annotated[Payload, Depends(parse_payload)],
     client: Annotated[AsyncClient, Depends(get_async_client)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """로그인 버튼을 제공합니다."""
+    kakao_id = payload.user_request.user.id
+    if not payload.user_request.user.properties:
+        plusfriend_user_key = None
+        app_user_id = None
+    else:
+        plusfriend_user_key = payload.user_request.user.properties.plusfriend_user_key
+        app_user_id = payload.user_request.user.properties.app_user_id
+
+    existing_user = await find_user(
+        db,
+        kakao_id=kakao_id,
+        plusfriend_user_key=plusfriend_user_key,
+        app_user_id=app_user_id,
+    )
+    if existing_user and has_active_login_session(existing_user):
+        raise KakaoError(message="이미 로그인된 사용자입니다.")
     login_link_response: IssueLinkRes = await generate_login_link(payload, client)
     response: KakaoResponse = await make_login_link_response(login_link_response)
     return response.get_dict()
@@ -88,6 +108,8 @@ async def login_callback(
                     "Check Auth Relay / offline_access configuration."
                 ),
             )
+
+        validate_login_callback_claims(data)
 
         logger.info(
             "Login callback tokens extracted successfully: "

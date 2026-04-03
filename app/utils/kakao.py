@@ -39,11 +39,11 @@ class KakaoError(Exception):
         return KakaoResponse().add_component(SimpleTextComponent(self.message))
 
 
-class NotAuthorizedError(Exception):
+class NotAuthenticated(Exception):
     """사용자 로그인(등록) 과정이 진행되지 않아 발생하는 에러입니다."""
 
     def __init__(self, *args, **kwargs):
-        """Initializes the NotAuthorizedError instance."""
+        """Initializes the NotAuthenticated instance."""
         super().__init__(*args, **kwargs)
 
     def get_response(self) -> KakaoResponse:
@@ -88,6 +88,43 @@ class LoginRequiredError(Exception):
             "로그인하기",
             action=ActionEnum.BLOCK,
             block_id=BlockID.LOGIN,
+        )
+        response.add_component(card)
+        return response
+
+
+class UserIdentityConflictError(Exception):
+    """입력된 식별자들이 서로 다른 사용자에 매칭되는 경우 발생하는 에러입니다.
+
+    이 에러는 사용자 인증 상태 문제가 아니라,
+    시스템 내부의 사용자 식별자 정합성 충돌 상황을 의미합니다.
+    """
+
+    def __init__(
+        self,
+        *args,
+        message: str | KakaoResponse | None = None,
+        **kwargs,
+    ):
+        """충돌 상황에서 사용자에게 보여줄 메시지를 저장합니다."""
+        super().__init__(*args, **kwargs)
+        self.message = message
+
+    def get_response(self) -> KakaoResponse:
+        """충돌 상황을 사용자에게 안내하는 KakaoResponse를 반환합니다."""
+        if isinstance(self.message, KakaoResponse):
+            return self.message
+
+        description = (
+            self.message
+            if self.message
+            else "사용자 정보 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요. 계속 문제가 발생할 경우 관리자에게 문의해주세요."
+        )
+
+        response = KakaoResponse()
+        card = TextCardComponent(
+            title="사용자 정보 오류",
+            description=description,
         )
         response.add_component(card)
         return response
