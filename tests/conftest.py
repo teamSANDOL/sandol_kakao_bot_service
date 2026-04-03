@@ -2,6 +2,8 @@ from pathlib import Path
 import os
 import sys
 
+import pytest
+
 
 os.environ.setdefault("DEBUG", "true")
 os.environ.setdefault(
@@ -17,3 +19,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+from app.services.auth_service import _NONCE_CACHE
+
+
+@pytest.fixture(autouse=True)
+def clear_nonce_cache() -> None:
+    _NONCE_CACHE.clear()
+    yield
+    _NONCE_CACHE.clear()
