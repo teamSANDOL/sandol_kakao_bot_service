@@ -41,6 +41,7 @@ def _normalize_to_utc(dt: datetime) -> datetime:
 
 
 def has_active_login_session(user: User) -> bool:
+    """저장된 refresh token 기준으로 재로그인 없이 사용 가능한 세션인지 확인합니다."""
     if not user.keycloak_id or not user.refresh_token or not user.refresh_token_expires_at:
         return False
 
@@ -265,7 +266,7 @@ async def get_user(
     plusfriend_user_key: str | None = None,
     app_user_id: str | None = None,
 ) -> User:
-    """사용자를 우선순위에 따라 조회합니다."""
+    """주어진 식별자들로 사용자를 조회하고 필요 시 식별자 값을 동기화합니다."""
     user = await find_user(
         db=db,
         kakao_id=kakao_id,

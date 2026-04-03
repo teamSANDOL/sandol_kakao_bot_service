@@ -43,7 +43,7 @@ class NotAuthenticated(Exception):
     """사용자 로그인(등록) 과정이 진행되지 않아 발생하는 에러입니다."""
 
     def __init__(self, *args, **kwargs):
-        """Initializes the NotAuthorizedError instance."""
+        """Initializes the NotAuthenticated instance."""
         super().__init__(*args, **kwargs)
 
     def get_response(self) -> KakaoResponse:
@@ -106,6 +106,7 @@ class UserIdentityConflictError(Exception):
         message: str | KakaoResponse | None = None,
         **kwargs,
     ):
+        """충돌 상황에서 사용자에게 보여줄 메시지를 저장합니다."""
         super().__init__(*args, **kwargs)
         self.message = message
 
