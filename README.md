@@ -48,6 +48,8 @@
 
 - **모든 서비스는 Docker 기반으로 실행**되므로, `Docker`만 설치되어 있다면 로컬 환경에 별도로 의존하지 않음
 - 환경 변수 파일 (`.env`) 필요
+- 루트 compose 기준으로 Keycloak의 `KC_HOSTNAME`은 루트 `.env`의 `SERVICE_DOMAIN`에서 관리됩니다.
+  - 변수명을 `KC_HOSTNAME`으로 두지 않은 이유는 같은 도메인 값을 다른 서비스 설정에서도 재사용할 수 있도록 공통 이름으로 관리하기 위해서입니다.
 - `.env` / `.env.example`는 현재 아래와 같이 분야별로 정리되어 있음
 
   ```.env
@@ -91,7 +93,7 @@
 | `TIMEZONE` | No | `Asia/Seoul` | `Asia/Seoul` | No | `Config.TZ`로 변환되어 사용 | 날짜/시간 응답 직렬화 및 시간 계산 기준 타임존입니다. |
 | `BASE_URL` | No | `https://sandol.sio2.kr/kakao-bot` | `https://sandol.sio2.kr/kakao-bot` | No | 끝 `/`는 내부에서 정리됨 | 외부 접근 기준 URL이며 로그인 콜백 기본값 계산에 사용됩니다. |
 | `LOGIN_CALLBACK_URL` | No | `{BASE_URL}/users/callback` | `https://.../kakao-bot/users/callback` | No | 미설정 시 `BASE_URL` 기반 자동 계산 | Auth Relay 로그인 콜백 URL입니다. |
-| `LOGIN_REDIRECT_AFTER` | No | empty / `None` | `` | No | 빈 문자열(`""`)과 `None`은 의미가 다를 수 있어 명시 권장 | 로그인 완료 후 추가 리다이렉트 URL입니다. |
+| `LOGIN_REDIRECT_AFTER` | No | empty / `None` | `/auth/realms/Sandori/account/` | No | safe relative path만 허용되며 절대 URL은 사용할 수 없음 | 로그인 완료 후 추가 리다이렉트 상대 경로입니다. |
 | `DATABASE_URL` | Yes | `sqlite+aiosqlite:///./kakao_bot_service.db` | `sqlite+aiosqlite:///./kakao_bot_service.db` | No | Alembic(`alembic/env.py`)에서 필수 | 앱 DB 엔진과 마이그레이션 연결 문자열입니다. |
 | `CACHE_DIR` | No | `./.cache` | `./.cache` | No | nonce/cache 저장 경로 | Auth Relay nonce 검증 캐시 저장 위치입니다. |
 | `AUTH_RELAY_URL` | Yes (login flow) | `http://auth-relay:8000/relay` | `http://auth-relay:8000/relay` | No | `/issue_login_link` 호출에 사용 | 로그인 링크 발급용 auth-relay base URL입니다. |
@@ -99,7 +101,7 @@
 | `STATIC_INFO_SERVICE_URL` | Yes (statics feature) | `http://static-info-service:80/static-info` | `http://static-info-service:80/static-info` | No | 조직도/셔틀 이미지 조회 | 정적 정보 기능 upstream base URL입니다. |
 | `NOTICE_SERVICE_URL` | Yes (notice feature) | `http://notice-notification:8081/notice-notification` | `http://notice-notification:3000/notice-notification` | No | `.env.example` 예시 포트(3000)와 코드 fallback(8081) 불일치, 운영에서는 실제 포트로 명시 | 공지 조회 기능 upstream base URL입니다. |
 | `CLASSROOM_TIMETABLE_SERVICE_URL` | Yes (classroom feature) | `http://classroom-timetable-service:80/classroom-timetable` | `http://classroom-timetable-service:80/classroom-timetable` | No | 빈 강의실 조회 API 호출 | 강의실 시간표 기능 upstream base URL입니다. |
-| `KC_SERVER_URL` | Yes (auth feature) | `https://sandol.sio2.kr/auth/` | `https://sandol.sio2.kr/auth/` | No | 내부에서 trailing slash 정규화 | Keycloak 서버 base URL입니다. |
+| `KC_SERVER_URL` | Yes (auth feature) | `https://sandol.sio2.kr/auth/` | `https://sandol.sio2.kr/auth/` | No | 내부에서 trailing slash 정규화, host는 루트 `SERVICE_DOMAIN` 기반 Keycloak 공개 주소와 일치해야 함 | Keycloak 서버 base URL입니다. |
 | `KC_CLIENT_ID` | Yes (auth feature) | `sandol-kakao-bot` | `sandol-kakao-bot` | No | login link payload에도 사용 | Keycloak 클라이언트 ID입니다. |
 | `KC_REALM` | Yes (auth feature) | `Sandori` | `Sandori` | No | Keycloak client 초기화에 사용 | Keycloak Realm 이름입니다. |
 | `KC_CLIENT_SECRET` | Yes when `DEBUG=False` | none | `*****` | Yes | `Config._validate()`에서 운영 시 필수 | Keycloak confidential client 시크릿입니다. |

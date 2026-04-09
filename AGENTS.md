@@ -174,6 +174,8 @@ async def endpoint(
 
 ## 환경 변수 가이드
 - 기준 파일: `.env.example`
+- 루트 compose에서는 Keycloak의 `KC_HOSTNAME`을 루트 `.env`의 `SERVICE_DOMAIN`으로 관리합니다.
+- `SERVICE_DOMAIN`이라는 공통 이름을 쓰는 이유는 같은 도메인 값을 다른 서비스 설정에서도 재사용할 수 있게 하기 위해서입니다.
 - 핵심 항목: `BASE_URL`, `DATABASE_URL`, `AUTH_RELAY_URL`, `MEAL_SERVICE_URL`, `STATIC_INFO_SERVICE_URL`, `NOTICE_SERVICE_URL`, `CLASSROOM_TIMETABLE_SERVICE_URL`
 - 인증/보안 항목: `KC_SERVER_URL`, `KC_CLIENT_ID`, `KC_CLIENT_SECRET`, `TOKEN_ENCRYPTION_KEY`, `RELAY_CLIENT_SECRETS`
 - 운영 시크릿은 절대 하드코딩/로그 출력하지 않습니다.

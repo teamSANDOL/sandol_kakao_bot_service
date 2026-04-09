@@ -9,6 +9,8 @@ import logging
 from dotenv import load_dotenv
 from pytz import timezone
 
+from app.validators.redirects import normalize_optional_relative_path
+
 
 # 환경 변수 로딩
 load_dotenv()
@@ -64,7 +66,9 @@ class Config:
         "/"
     )
     LOGIN_CALLBACK_URL = os.getenv("LOGIN_CALLBACK_URL", f"{BASE_URL}/users/callback")
-    LOGIN_REDIRECT_AFTER = os.getenv("LOGIN_REDIRECT_AFTER")
+    LOGIN_REDIRECT_AFTER = normalize_optional_relative_path(
+        os.getenv("LOGIN_REDIRECT_AFTER")
+    )
 
     KC_SERVER_URL = (
         os.getenv("KC_SERVER_URL", "https://sandol.sio2.kr/auth/").rstrip("/") + "/"

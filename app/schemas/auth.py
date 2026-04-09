@@ -2,7 +2,9 @@
 
 from typing import Optional
 
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, HttpUrl, field_validator
+
+from app.validators.redirects import normalize_optional_relative_path
 
 
 class IssueLinkReq(BaseModel):
@@ -18,7 +20,17 @@ class IssueLinkReq(BaseModel):
     chatbot_user_id: str
     callback_url: HttpUrl
     client_key: str
-    redirect_after: Optional[HttpUrl] = None
+    redirect_after: Optional[str] = None
+
+    @field_validator("redirect_after", mode="before")
+    @classmethod
+    def validate_redirect_after(cls, value: object) -> Optional[str]:
+        """로그인 후 이동 경로를 auth-relay 정책과 동일하게 검증한다."""
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError("redirect_after must be a string.")
+        return normalize_optional_relative_path(value)
 
 
 class IssueLinkRes(BaseModel):

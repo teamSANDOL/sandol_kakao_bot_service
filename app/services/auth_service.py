@@ -11,7 +11,6 @@ from datetime import datetime, timezone, timedelta
 import jwt
 from jwt import InvalidTokenError
 from diskcache import FanoutCache  # type: ignore[import-untyped]
-from pydantic import HttpUrl
 from fastapi import HTTPException
 from httpx import AsyncClient, HTTPStatusError
 from keycloak import KeycloakOpenID
@@ -275,11 +274,9 @@ async def generate_login_link(payload: Payload, client: AsyncClient) -> IssueLin
 
     request_payload = IssueLinkReq(
         chatbot_user_id=chatbot_user_id,
-        callback_url=HttpUrl(Config.LOGIN_CALLBACK_URL),
+        callback_url=Config.LOGIN_CALLBACK_URL,
         client_key=Config.KC_CLIENT_ID,
-        redirect_after=HttpUrl(Config.LOGIN_REDIRECT_AFTER)
-        if Config.LOGIN_REDIRECT_AFTER is not None
-        else None,
+        redirect_after=Config.LOGIN_REDIRECT_AFTER,
     )
     payload_dict = request_payload.model_dump(mode="json")
     logger.debug(payload_dict)
