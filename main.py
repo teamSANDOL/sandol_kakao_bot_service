@@ -73,13 +73,71 @@ def is_internal_route(request: Request) -> bool:
     return isinstance(route, APIRoute) and "internal" in set(route.tags or [])
 
 
+def _build_internal_error_response(exc: Exception | HTTPException) -> JSONResponse:
+    """Internal 라우트용 예외 응답을 생성합니다."""
+    if isinstance(exc, HTTPException):
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "Internal Server Error"},
+    )
+
+
+def _build_kakao_exception_response(
+    exc: KakaoError | LoginRequiredError | NotAuthenticated | UserIdentityConflictError,
+) -> JSONResponse:
+    """Kakao 제어 흐름 예외를 200 응답으로 변환합니다."""
+    return JSONResponse(exc.get_response().get_dict())
+
+
+@app.exception_handler(KakaoError)
+async def kakao_error_handler(request: Request, exc: KakaoError) -> JSONResponse:
+    """KakaoError를 사용자 응답으로 변환합니다."""
+    if is_internal_route(request):
+        return _build_internal_error_response(exc)
+    return _build_kakao_exception_response(exc)
+
+
+@app.exception_handler(LoginRequiredError)
+async def login_required_error_handler(
+    request: Request,
+    exc: LoginRequiredError,
+) -> JSONResponse:
+    """LoginRequiredError를 사용자 응답으로 변환합니다."""
+    if is_internal_route(request):
+        return _build_internal_error_response(exc)
+    return _build_kakao_exception_response(exc)
+
+
+@app.exception_handler(NotAuthenticated)
+async def not_authenticated_error_handler(
+    request: Request,
+    exc: NotAuthenticated,
+) -> JSONResponse:
+    """NotAuthenticated를 사용자 응답으로 변환합니다."""
+    if is_internal_route(request):
+        return _build_internal_error_response(exc)
+    return _build_kakao_exception_response(exc)
+
+
+@app.exception_handler(UserIdentityConflictError)
+async def user_identity_conflict_error_handler(
+    request: Request,
+    exc: UserIdentityConflictError,
+) -> JSONResponse:
+    """UserIdentityConflictError를 사용자 응답으로 변환합니다."""
+    if is_internal_route(request):
+        return _build_internal_error_response(exc)
+    return _build_kakao_exception_response(exc)
+
+
 @app.exception_handler(Exception)
 async def http_exception_handler(request: Request, exc: Exception | HTTPException):
-    """HTTPException 핸들러입니다.
+    """일반 예외를 적절한 응답으로 변환합니다.
 
     예외 발생 시 적절한 응답을 반환합니다.
-    예외가 KakaoError인 경우, 해당 예외의 응답을 반환합니다.
-    그 외의 경우, 기본적인 에러 메시지를 반환합니다.
+    내부 라우트는 HTTP 상태코드를 유지하고,
+    그 외의 경우 기본적인 Kakao 에러 메시지를 반환합니다.
 
     Args:
         request (Request): 요청 객체
@@ -89,24 +147,7 @@ async def http_exception_handler(request: Request, exc: Exception | HTTPExceptio
         JSONResponse: 예외에 대한 JSON 응답
     """
     if is_internal_route(request):
-        if isinstance(exc, HTTPException):
-            return JSONResponse(
-                status_code=exc.status_code, content={"detail": exc.detail}
-            )
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"detail": "Internal Server Error"},
-        )
-    if isinstance(
-        exc,
-        (
-            KakaoError,
-            LoginRequiredError,
-            NotAuthenticated,
-            UserIdentityConflictError,
-        ),
-    ):
-        return JSONResponse(exc.get_response().get_dict())
+        return _build_internal_error_response(exc)
 
     # 예외 처리 시 로그 남기기
     logger.error(
