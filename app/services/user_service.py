@@ -303,33 +303,22 @@ async def get_user_info(
     keycloak_client = get_keycloak_client()
 
     try:
-        try:
-            user_info: dict = await keycloak_client.a_userinfo(token=access_token)
-        except KeycloakError:
-            logger.warning(
-                "비동기 Keycloak userinfo 호출 실패, 동기 호출로 재시도 시도",
-                exc_info=True,
-            )
-            user_info = keycloak_client.userinfo(token=access_token)
-        return UserSchema(
-            sub=keycloak_sub,
-            name=user_info.get("username", user_info.get("preferred_username", "")),
-            preferred_username=user_info.get("preferred_username", ""),
-            email=user_info.get("email", ""),
-            email_verified=user_info.get("email_verified", False),
-            first_name=user_info.get("first_name", user_info.get("given_name", "")),
-            last_name=user_info.get("last_name", user_info.get("family_name", "")),
+        user_info: dict = await keycloak_client.a_userinfo(token=access_token)
+    except KeycloakError:
+        logger.warning(
+            "비동기 Keycloak userinfo 호출 실패, 동기 호출로 재시도 시도",
+            exc_info=True,
         )
-    except KeycloakError as exc:
-        logger.error(
-            "Failed to fetch user info from Keycloak for sub=%s: %s",
-            keycloak_sub,
-            exc,
-        )
-        raise HTTPException(
-            status_code=Config.HttpStatus.INTERNAL_SERVER_ERROR,
-            detail="사용자 정보 조회 중 오류가 발생했습니다.",
-        ) from exc
+        user_info = keycloak_client.userinfo(token=access_token)
+    return UserSchema(
+        sub=keycloak_sub,
+        name=user_info.get("username", user_info.get("preferred_username", "")),
+        preferred_username=user_info.get("preferred_username", ""),
+        email=user_info.get("email", ""),
+        email_verified=user_info.get("email_verified", False),
+        first_name=user_info.get("first_name", user_info.get("given_name", "")),
+        last_name=user_info.get("last_name", user_info.get("family_name", "")),
+    )
 
 
 async def get_current_user(
