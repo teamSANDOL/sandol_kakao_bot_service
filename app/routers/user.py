@@ -183,11 +183,6 @@ async def get_my_info(
     """내 사용자 정보를 조회합니다."""
     user_info: UserSchema = await get_user_info(client, db, user)
 
-    if not user_info:
-        logger.warning("User not found: %s", payload.user_id)
-        raise HTTPException(
-            status_code=Config.HttpStatus.NOT_FOUND, detail="user_not_found"
-        )
     logger.info("User info retrieved: %s", user_info.sub)
 
     response: KakaoResponse = await make_user_info_response(user_info)
