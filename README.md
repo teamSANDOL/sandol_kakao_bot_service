@@ -32,6 +32,9 @@
 사용자 정보는 `tuk_sandol_team`프로젝트에서 공통적으로 `keycloak`을 통해 중앙관리되며, `auth-relay`를 통한 로그인 링크 발급 후 사용자가 별도 웹페이지로 로그인을 진행하면 사용자의 token을 서버에서 저장 및 사용합니다.
 해당 token을 사용해 사용자 정보가 포함되어야 하는 작업을 처리합니다.
 
+- 카카오 사용자 대상(non-internal) 스킬 엔드포인트는 예외 상황에서도 가능한 한 Kakao 응답 JSON(HTTP 200)으로 반환되도록 설계되어 있습니다.
+- Keycloak 사용자 존재 확인과 stale 매핑 판정에도 동일한 `KC_CLIENT_ID` / `KC_CLIENT_SECRET`을 사용합니다.
+
 ---
 
 ## 📌 문서
