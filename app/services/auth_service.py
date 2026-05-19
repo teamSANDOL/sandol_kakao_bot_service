@@ -13,8 +13,9 @@ from jwt import InvalidTokenError
 from diskcache import FanoutCache  # type: ignore[import-untyped]
 from fastapi import HTTPException
 from httpx import AsyncClient, HTTPStatusError
-from keycloak import KeycloakOpenID
-from keycloak.exceptions import KeycloakError
+from keycloak import KeycloakAdmin, KeycloakOpenID
+from keycloak.exceptions import KeycloakAuthenticationError, KeycloakError, KeycloakGetError
+from pydantic import HttpUrl, TypeAdapter
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,7 +26,8 @@ from app.config import Config, logger
 from app.config.config import CACHE_DIR
 from app.schemas.auth import IssueLinkReq, IssueLinkRes, LoginCallbackReq
 from app.models.users import User
-from app.utils.security import encrypt_token
+from app.utils.kakao import KakaoError
+from app.utils.security import decrypt_token, encrypt_token
 
 _NONCE_CACHE = FanoutCache(directory=CACHE_DIR, shards=8)
 
@@ -39,6 +41,53 @@ def get_keycloak_client() -> KeycloakOpenID:
         client_secret_key=Config.KC_CLIENT_SECRET,
         timeout=10,
     )
+
+
+def get_keycloak_admin_client() -> KeycloakAdmin:
+    """사용자 존재 여부 확인용 KeycloakAdmin 인스턴스를 생성합니다."""
+    return KeycloakAdmin(
+        server_url=Config.KC_SERVER_URL,
+        realm_name=Config.KC_REALM,
+        client_id=Config.KC_CLIENT_ID,
+        client_secret_key=Config.KC_CLIENT_SECRET,
+        timeout=10,
+    )
+
+
+def keycloak_user_exists(keycloak_sub: str) -> bool | None:
+    """Keycloak Admin API로 사용자의 존재 여부를 확인합니다.
+
+    Returns:
+        bool | None: 존재하면 True, 없으면 False, 권한/인증 문제면 None.
+    """
+    admin_client = get_keycloak_admin_client()
+
+    try:
+        admin_client.get_user(keycloak_sub)
+    except KeycloakAuthenticationError:
+        logger.warning(
+            "Keycloak admin authentication failed while checking user existence for sub=%s",
+            keycloak_sub,
+        )
+        return None
+    except KeycloakGetError as exc:
+        if exc.response_code == Config.HttpStatus.NOT_FOUND:
+            return False
+        if exc.response_code == Config.HttpStatus.FORBIDDEN:
+            logger.warning(
+                "Keycloak admin permission denied while checking user existence for sub=%s",
+                keycloak_sub,
+            )
+            return None
+        logger.error(
+            "Keycloak admin lookup failed for sub=%s with status=%s",
+            keycloak_sub,
+            exc.response_code,
+            exc_info=True,
+        )
+        return None
+
+    return True
 
 
 def canonical_json(data: dict[str, Any]) -> str:
@@ -134,7 +183,7 @@ def validate_login_callback_claims(payload: LoginCallbackReq) -> None:
 def extract_keycloak_sub(decrypted_access_token: str) -> str:
     """Access Token에서 Keycloak `sub` 값을 추출합니다."""
     try:
-        token_payload: dict = jwt.decode(
+        token_payload: dict[str, object] = jwt.decode(
             decrypted_access_token,
             options={
                 "verify_signature": False,
@@ -267,24 +316,30 @@ async def generate_login_link(payload: Payload, client: AsyncClient) -> IssueLin
     """로그인 링크를 auth-relay로부터 발급받습니다."""
     chatbot_user_id = payload.user_id
     if chatbot_user_id is None:
-        raise HTTPException(
-            status_code=Config.HttpStatus.BAD_REQUEST,
-            detail="Missing user id in payload",
+        raise KakaoError(
+            "사용자 정보를 확인할 수 없습니다. 잠시 후 다시 시도해주세요."
         )
+
+    try:
+        callback_url = TypeAdapter(HttpUrl).validate_python(Config.LOGIN_CALLBACK_URL)
+    except Exception as exc:  # noqa: BLE001
+        raise KakaoError(
+            "로그인 링크를 준비하는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
+        ) from exc
 
     request_payload = IssueLinkReq(
         chatbot_user_id=chatbot_user_id,
-        callback_url=Config.LOGIN_CALLBACK_URL,
+        callback_url=callback_url,
         client_key=Config.KC_CLIENT_ID,
         redirect_after=Config.LOGIN_REDIRECT_AFTER,
     )
     payload_dict = request_payload.model_dump(mode="json")
     logger.debug(payload_dict)
-    response = await client.post(
-        f"{Config.AUTH_RELAY_URL}/issue_login_link",
-        json=payload_dict,
-    )
     try:
+        response = await client.post(
+            f"{Config.AUTH_RELAY_URL}/issue_login_link",
+            json=payload_dict,
+        )
         response.raise_for_status()
     except HTTPStatusError as exc:
         logger.error(
@@ -292,15 +347,15 @@ async def generate_login_link(payload: Payload, client: AsyncClient) -> IssueLin
             exc.response.status_code,
             exc.response.text,
         )
-        raise HTTPException(
-            status_code=502, detail="Failed to issue login link from auth relay"
+        raise KakaoError(
+            "로그인 링크를 생성하지 못했습니다. 잠시 후 다시 시도해주세요."
         ) from exc
 
     try:
         return IssueLinkRes.model_validate(response.json())
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(
-            status_code=502, detail="Invalid response from auth relay"
+        raise KakaoError(
+            "로그인 링크 응답을 처리하는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
         ) from exc
 
 
@@ -318,6 +373,87 @@ def _kakao_identity_matches(
     if plusfriend_user_key and db_user.plusfriend_user_key:
         return db_user.plusfriend_user_key == plusfriend_user_key
     return db_user.kakao_id == kakao_id
+
+
+def _normalize_to_utc(dt: datetime) -> datetime:
+    """Datetime 객체를 UTC 기준으로 변환합니다."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _has_active_login_session(user: User) -> bool:
+    """기존 매핑이 재로그인 없이 사용 가능한 활성 세션인지 확인합니다."""
+    if not user.keycloak_id or not user.refresh_token or not user.refresh_token_expires_at:
+        return False
+
+    refresh_expires_at = _normalize_to_utc(user.refresh_token_expires_at)
+    if refresh_expires_at <= datetime.now(timezone.utc):
+        return False
+
+    try:
+        decrypt_token(user.refresh_token)
+    except (ValueError, RuntimeError):
+        return False
+
+    return True
+
+
+async def _has_active_remote_login_session(user: User) -> bool:
+    """Keycloak에 refresh token을 확인해 기존 매핑이 실제로 활성 상태인지 판단합니다."""
+    if not _has_active_login_session(user):
+        return False
+
+    refresh_token = user.refresh_token
+    if refresh_token is None:
+        return False
+
+    try:
+        decrypted_refresh_token = decrypt_token(refresh_token)
+    except (ValueError, RuntimeError):
+        logger.warning(
+            "Treating Kakao-Keycloak mapping as stale because refresh token decryption failed for sub=%s",
+            user.keycloak_id,
+        )
+        return False
+
+    try:
+        token_response = await request_token_refresh(
+            decrypted_refresh_token,
+            keycloak_sub=user.keycloak_id,
+        )
+    except HTTPException as exc:
+        if exc.status_code == Config.HttpStatus.UNAUTHORIZED:
+            logger.info(
+                "Treating Kakao-Keycloak mapping as stale because remote refresh session is no longer valid for sub=%s",
+                user.keycloak_id,
+            )
+            return False
+
+        logger.warning(
+            "Preserving Kakao-Keycloak conflict because remote refresh validation failed unexpectedly for sub=%s status=%s",
+            user.keycloak_id,
+            exc.status_code,
+        )
+        return True
+
+    try:
+        user.access_token = encrypt_token(str(token_response["access_token"]))
+        user.refresh_token = encrypt_token(str(token_response["refresh_token"]))
+        user.access_token_expires_at = get_expiry_datetime(int(token_response["expires_in"]))
+        user.refresh_token_expires_at = get_expiry_datetime(
+            int(token_response["refresh_expires_in"])
+        )
+    except (KeyError, ValueError, RuntimeError) as exc:
+        logger.warning(
+            "Preserving Kakao-Keycloak conflict because refreshed token payload could not be persisted for sub=%s: %s",
+            user.keycloak_id,
+            exc,
+            exc_info=True,
+        )
+        return True
+
+    return True
 
 
 async def map_keycloak_user(
@@ -414,10 +550,18 @@ async def map_keycloak_user(
                 user_by_kakao_identity
                 and user_by_kakao_identity.keycloak_id != keycloak_sub
             ):
-                # 여기서도 ‘카카오 사용자’ 자체는 이미 user_by_kakao_identity로 결정된 상태
-                raise HTTPException(
-                    status_code=409,
-                    detail="해당 카카오 계정은 이미 다른 Keycloak 계정과 연결되어 있습니다.",
+                if await _has_active_remote_login_session(user_by_kakao_identity):
+                    # 여기서도 ‘카카오 사용자’ 자체는 이미 user_by_kakao_identity로 결정된 상태
+                    raise HTTPException(
+                        status_code=409,
+                        detail="해당 카카오 계정은 이미 다른 Keycloak 계정과 연결되어 있습니다.",
+                    )
+
+                logger.info(
+                    "Replacing stale Kakao-Keycloak mapping for kakao_id=%s old_sub=%s new_sub=%s",
+                    user_by_kakao_identity.kakao_id,
+                    user_by_kakao_identity.keycloak_id,
+                    keycloak_sub,
                 )
 
             # 케이스 4) 한쪽만 존재: 충돌이 아니라면 같은 사용자로 보고 붙여서 갱신
