@@ -263,8 +263,9 @@ def save_menu(
 # 식당 유형을 문자열로 변환하기 위한 딕셔너리 (전역 변수로 정의)
 ESTABLISHMENT_TYPE_DICT = {
     "student": "학생식당",
-    "vendor": "교내 입점업체",
-    "external": "교외 업체",
+    "fixed_menu_restaurant": "고정메뉴 일반식당",
+    "fixed_korean_buffet": "고정메뉴형 한식뷔페",
+    "variable_korean_buffet": "메뉴 변경형 한식뷔페",
 }
 
 

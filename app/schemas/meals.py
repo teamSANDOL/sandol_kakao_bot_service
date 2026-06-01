@@ -118,7 +118,7 @@ class RestaurantSchema(BaseModel):
 
     Attributes:
         name (str): 레스토랑 이름
-        establishment_type (Literal["student", "vendor", "external"]): 레스토랑 유형
+        establishment_type (Literal["student", "fixed_menu_restaurant", "fixed_korean_buffet", "variable_korean_buffet"]): 레스토랑 유형
         location (Optional[Location]): 위치 정보
         opening_time (Optional[TimeRange]): 영업 시간
         break_time (Optional[TimeRange]): 휴식 시간
@@ -129,7 +129,7 @@ class RestaurantSchema(BaseModel):
     """
 
     name: str
-    establishment_type: Literal["student", "vendor", "external"]
+    establishment_type: Literal["student", "fixed_menu_restaurant", "fixed_korean_buffet", "variable_korean_buffet"]
     location: Optional[Location] = None
     opening_time: Optional[TimeRange] = None
     break_time: Optional[TimeRange] = None
