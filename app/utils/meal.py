@@ -171,7 +171,8 @@ def time_range_to_string(  # noqa: D417
     if len(args) == 1 and isinstance(args[0], TimeRange) or "time_range" in kwargs:
         time_range = args[0] if len(args) == 1 else kwargs["time_range"]
         if isinstance(time_range, TimeRange):
-            return time_range.to_string()
+            time_range.to_string()
+            return f"{time_range.start} ~ {time_range.end}"
         return f"{time_range.start} ~ {time_range.end}"
     return ""
 
