@@ -632,6 +632,14 @@ async def meal_register(
             .get_dict()
         )
 
+    logger.info(
+        "식단 등록 원문 입력: user_id=%s, meal_type=%s, restaurant_name=%s, menu_text=%s",
+        payload.user_id,
+        meal_type,
+        restaurant.name,
+        payload.action.detail_params.get("menu"),
+    )
+
     menu_list = split_string(menu_text)
 
     logger.debug(
