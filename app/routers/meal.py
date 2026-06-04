@@ -36,6 +36,7 @@ from app.services.user_service import get_xuser_client_by_payload, get_current_u
 from app.utils.http import XUserIDClient, get_async_client
 from app.utils import create_openapi_extra
 from app.utils.kakao import (
+    dump_kakao_value_json,
     parse_payload,
     extract_text_value,
 )
@@ -639,7 +640,7 @@ async def meal_register(
         payload.user_id,
         meal_type,
         restaurant.name,
-        payload.action.detail_params.get("menu"),
+        dump_kakao_value_json(payload.action.detail_params.get("menu")),
     )
 
     menu_list = split_string(menu_text)

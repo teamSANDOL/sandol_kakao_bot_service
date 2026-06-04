@@ -1,5 +1,6 @@
 """Kakao payload 파싱과 챗봇 에러 응답 유틸을 제공합니다."""
 
+import json
 import traceback
 from typing import Optional
 
@@ -155,6 +156,37 @@ def extract_text_value(value: object) -> str | None:
             if isinstance(nested, str):
                 return nested
     return None
+
+
+def to_jsonable_kakao_value(value: object) -> object:
+    """Kakao 입력 객체를 로그용 JSON-safe 값으로 변환합니다."""
+    if value is None or isinstance(value, str | int | float | bool):
+        return value
+
+    if isinstance(value, dict):
+        return {
+            str(key): to_jsonable_kakao_value(nested_value)
+            for key, nested_value in value.items()
+        }
+
+    if isinstance(value, list | tuple | set):
+        return [to_jsonable_kakao_value(item) for item in value]
+
+    if hasattr(value, "__dict__"):
+        serialized_attrs = {
+            key: to_jsonable_kakao_value(attr_value)
+            for key, attr_value in vars(value).items()
+            if not key.startswith("_") and not callable(attr_value)
+        }
+        if serialized_attrs:
+            return serialized_attrs
+
+    return str(value)
+
+
+def dump_kakao_value_json(value: object) -> str:
+    """Kakao 입력 객체를 로그용 JSON 문자열로 변환합니다."""
+    return json.dumps(to_jsonable_kakao_value(value), ensure_ascii=False)
 
 
 def error_message(message: str | BaseException) -> TextCardComponent:
