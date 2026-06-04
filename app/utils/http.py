@@ -32,6 +32,7 @@ class XUserIDClient(AsyncClient):
         **kwargs,
     ) -> None:
         """클라이언트를 초기화하고 헤더 주입용 컨텍스트를 저장합니다."""
+        kwargs.setdefault("follow_redirects", True)
         super().__init__(**kwargs)
         self.user_id = user_id
         self.access_token = access_token
@@ -65,5 +66,5 @@ async def get_async_client() -> AsyncGenerator[AsyncClient, None]:
     Returns:
         AsyncClient: 인증 정보가 없는 기본 HTTP 클라이언트.
     """
-    async with AsyncClient() as client:
+    async with AsyncClient(follow_redirects=True) as client:
         yield client
