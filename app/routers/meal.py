@@ -40,7 +40,6 @@ from app.utils.kakao import (
     extract_text_value,
 )
 from app.utils.meal import (
-    establishment_type_to_string,
     extract_menu,
     make_meal_cards,
     meal_error_response_maker,
@@ -202,7 +201,6 @@ async def meal_view(
 )
 async def meal_restaurant(
     payload: Annotated[Payload, Depends(parse_payload)],
-    user: Annotated[User, Depends(get_current_user)],
     client: Annotated[AsyncClient, Depends(get_async_client)],
 ) -> dict:
     """식당 정보를 반환하는 API입니다.
@@ -264,11 +262,15 @@ async def meal_restaurant(
         item_card.add_item(
             title="저녁 시간", description=time_range_to_string(restaurant.dinner_time)
         )
-    item_card.add_item(
-        title="분류",
-        description=establishment_type_to_string(restaurant.establishment_type),
-    )
-    # item_card.add_item(title="가격", description=f"{restaurant.price_per_person}원")  # TODO: 가격 정보 추가
+    if restaurant.price is not None:
+        item_card.add_item(title="1인분 가격", description=f"{restaurant.price}원")
+    if restaurant.location:
+        location_description = (
+            restaurant.location.building
+            if restaurant.location.is_campus and restaurant.location.building
+            else "교외"
+        )
+        item_card.add_item(title="위치", description=location_description)
     item_card.add_button(
         label="메뉴 보기", action="message", message_text=f"학식 {restaurant_name}"
     )

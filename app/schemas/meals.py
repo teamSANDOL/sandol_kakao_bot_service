@@ -130,6 +130,7 @@ class RestaurantSchema(BaseModel):
 
     name: str
     establishment_type: Literal["student", "fixed_menu_restaurant", "fixed_korean_buffet", "variable_korean_buffet"]
+    price: Optional[int] = None
     location: Optional[Location] = None
     opening_time: Optional[TimeRange] = None
     break_time: Optional[TimeRange] = None
