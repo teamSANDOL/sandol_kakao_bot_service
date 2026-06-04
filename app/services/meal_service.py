@@ -62,7 +62,7 @@ async def fetch_restaurants(
         if establishment_type is not None:
             params["establishment_type"] = establishment_type
         response = await client.get(
-            f"{Config.MEAL_SERVICE_URL}/restaurants",
+            f"{Config.MEAL_SERVICE_URL}/restaurants/",
             params=params,
         )
     else:
