@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Annotated, List, Optional, overload
 
 from fastapi import Depends
@@ -20,7 +20,8 @@ from kakao_chatbot.response.components import (
 from app.config import BlockID, logger
 from app.config.blocks import get_cafeteria_register_quick_replies
 from app.models.users import User
-from app.schemas.meals import MealCard, RestaurantResponse, TimeRange
+from app.config import Config
+from app.schemas.meals import MealCard, MealResponse, RestaurantResponse, TimeRange
 from app.services.meal_service import fetch_my_restaurants
 from app.services.user_service import get_current_user, get_xuser_client_by_payload
 from app.utils import get_korean_day
@@ -109,6 +110,43 @@ def make_meal_cards(
     dinner_carousel = create_carousel(dinner_meal, "dinner")
 
     return lunch_carousel, dinner_carousel
+
+
+def normalize_meal_datetime(value: datetime) -> datetime:
+    """식단 시각을 서비스 타임존 기준으로 정규화합니다."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc).astimezone(Config.TZ)
+    return value.astimezone(Config.TZ)
+
+
+def sort_meals_for_display(
+    meals: list[MealResponse],
+    student_restaurant_ids: set[int],
+) -> list[MealResponse]:
+    """카카오 식단 노출 규칙에 맞춰 식당 순서를 정렬합니다."""
+    today = datetime.now(tz=Config.TZ).date()
+    today_meals: list[MealResponse] = []
+    older_meals: list[MealResponse] = []
+
+    for meal in meals:
+        registered_at = normalize_meal_datetime(meal.registered_at)
+        if registered_at.date() == today:
+            today_meals.append(meal)
+        else:
+            older_meals.append(meal)
+
+    today_meals.sort(
+        key=lambda meal: (
+            meal.restaurant_id in student_restaurant_ids,
+            normalize_meal_datetime(meal.registered_at),
+        )
+    )
+    older_meals.sort(
+        key=lambda meal: normalize_meal_datetime(meal.registered_at),
+        reverse=True,
+    )
+
+    return today_meals + older_meals
 
 
 def split_string(s: str) -> list[str]:

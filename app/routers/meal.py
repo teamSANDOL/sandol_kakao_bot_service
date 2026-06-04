@@ -7,7 +7,6 @@
 import asyncio
 from copy import deepcopy
 from typing import Annotated, List, Literal
-from datetime import datetime, timedelta
 
 from fastapi import Depends, APIRouter
 
@@ -29,6 +28,7 @@ from app.schemas.meals import (
 from app.models.users import User
 from app.services.meal_service import (
     fetch_latest_meals,
+    fetch_restaurants,
     fetch_restaurant_by_name,
     post_meal,
 )
@@ -45,6 +45,7 @@ from app.utils.meal import (
     make_meal_cards,
     meal_error_response_maker,
     meal_response_maker,
+    sort_meals_for_display,
     save_menu,
     select_restaurant,
     split_string,
@@ -110,36 +111,22 @@ async def meal_view(
     if target_cafeteria:
         logger.debug("식단 정보 필터링: target_cafeteria=%s", target_cafeteria)
         meals = list(filter(lambda x: x.restaurant_name == target_cafeteria, meal_list))
+        ordered_meals = meals
     else:
         meals = meal_list
+        restaurants = await fetch_restaurants(client, establishment_type="student")
+        student_restaurant_ids = {
+            restaurant.id
+            for restaurant in restaurants
+            if restaurant.establishment_type == "student"
+        }
 
-    # 어제 7시를 기준으로 식당 정보를 필터링
-    logger.debug("식당 정보 정렬 시작")
-    standard_time = datetime.now(tz=Config.TZ) - timedelta(days=1)
-    standard_time = standard_time.replace(hour=19, minute=0, second=0, microsecond=0)
-    af_standard: list[MealResponse] = []
-    bf_standard: list[MealResponse] = []
-    for meal in meals:
-        if meal.updated_at < standard_time:
-            logger.debug(
-                "식당 정보 정렬: %s | 어제 7시 이전 등록", meal.restaurant_name
-            )
-            bf_standard.append(meal)
-        else:
-            logger.debug(
-                "식당 정보 정렬: %s | 어제 7시 이후 등록", meal.restaurant_name
-            )
-            af_standard.append(meal)
-
-    bf_standard.sort(key=lambda x: x.updated_at)
-    af_standard.sort(key=lambda x: x.updated_at)
-
-    # 어제 7시 이후 등록된 식당 정보를 먼저 배치
-    restaurants = af_standard + bf_standard
+        logger.debug("식단 정보 정렬 시작")
+        ordered_meals = sort_meals_for_display(meals, student_restaurant_ids)
 
     lunch = []
     dinner = []
-    for meal in restaurants:
+    for meal in ordered_meals:
         if meal.meal_type == MealType.lunch:
             lunch.append(meal)
         elif meal.meal_type == MealType.dinner:

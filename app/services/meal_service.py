@@ -1,6 +1,6 @@
 """식단/식당 조회 및 등록을 위한 외부 API 연동 서비스입니다."""
 
-from typing import Any, List, Optional
+from typing import Any, List, Literal, Optional
 
 from httpx import AsyncClient
 
@@ -41,6 +41,7 @@ async def fetch_latest_meals(
 async def fetch_restaurants(
     client: AsyncClient,
     restaurant_id: Optional[int] = None,
+    establishment_type: Optional[Literal["student", "fixed_menu_restaurant", "fixed_korean_buffet", "variable_korean_buffet"]] = None,
 ) -> List[RestaurantResponse]:
     """식당 정보를 가져오는 함수.
 
@@ -50,21 +51,35 @@ async def fetch_restaurants(
             None인 경우 모든 식당 정보를 가져옵니다.
             특정 식당의 정보를 가져오려면 해당 식당 ID를 제공해야 합니다.
             식당 ID가 제공되면 해당 식당의 정보만 가져옵니다.
+        establishment_type (str, optional): 식당 유형 필터. 기본값은 None.
+            None인 경우 모든 식당 유형을 가져옵니다.
 
     Returns:
         List[RestaurantResponse]: 식당 정보 리스트
     """
     if not restaurant_id:
-        response = await client.get(f"{Config.MEAL_SERVICE_URL}/restaurants")
+        params: dict[str, str | int] = {"size": 100}
+        if establishment_type is not None:
+            params["establishment_type"] = establishment_type
+        response = await client.get(
+            f"{Config.MEAL_SERVICE_URL}/restaurants",
+            params=params,
+        )
     else:
         response = await client.get(
             (f"{Config.MEAL_SERVICE_URL}/restaurants/{restaurant_id}")
         )
     response.raise_for_status()
-    list_data = response.json().get("data", [])
+    data = response.json().get("data")
 
-    # Pydantic 모델을 사용하여 JSON 데이터를 직접 변환
-    return [RestaurantResponse.model_validate(item) for item in list_data]
+    if restaurant_id:
+        if isinstance(data, dict):
+            return [RestaurantResponse.model_validate(data)]
+        return []
+
+    if isinstance(data, list):
+        return [RestaurantResponse.model_validate(item) for item in data]
+    return []
 
 
 async def fetch_restaurant_by_name(
