@@ -149,6 +149,10 @@ def sort_meals_for_display(
     return today_meals + older_meals
 
 
+SPECIAL_DELIMITER_PATTERNS = [r",\s*", r";", r":", r"\|", r"-", r"/"]
+SPECIAL_DELIMITER_REGEX = re.compile("|".join(SPECIAL_DELIMITER_PATTERNS))
+
+
 def split_string(s: str) -> list[str]:
     """문자열을 구분자를 기준으로 분리하여 리스트로 반환합니다.
 
@@ -161,16 +165,10 @@ def split_string(s: str) -> list[str]:
     Returns:
         list: 분리된 문자열 리스트
     """
-    # 여러 구분자를 개행 문자로 변경
-    delimiters = [r",\s*", r";", r":", r"\|", r"-", r"/"]
-    regex_pattern = "|".join(delimiters)
-    modified_str = re.sub(regex_pattern, "\n", s)
-
-    # 개행 문자가 있는지 확인
-    if "\n" in modified_str:
-        # 개행 문자를 기준으로 분리하고, 각 항목의 양 끝 공백 제거
+    if SPECIAL_DELIMITER_REGEX.search(s):
+        modified_str = SPECIAL_DELIMITER_REGEX.sub("\n", s)
         return [item.strip() for item in modified_str.split("\n") if item.strip()]
-    # white-space를 기준으로 분리하고, 각 항목의 양 끝 공백 제거
+
     return [item.strip() for item in re.split(r"\s+", s) if item.strip()]
 
 
