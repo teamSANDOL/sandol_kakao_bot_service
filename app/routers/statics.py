@@ -12,7 +12,6 @@ from kakao_chatbot import Payload
 from kakao_chatbot.response import KakaoResponse
 from kakao_chatbot.response.components import (
     SimpleTextComponent,
-    SimpleImageComponent,
 )
 
 from app.schemas.statics import OrganizationGroup
@@ -25,6 +24,7 @@ from app.utils.kakao import parse_payload, extract_text_value
 from app.utils.openapi import create_openapi_extra
 from app.utils.statics import (
     make_org_group_list,
+    make_shuttle_info_components,
     make_unit_item,
 )
 
@@ -147,10 +147,6 @@ async def shuttle_info(
     shuttle_images = await fetch_shuttle_img_links(client)
     shuttle_images.reverse()
 
-    components = [
-        SimpleImageComponent(image, "셔틀버스 정보 사진") for image in shuttle_images
-    ]
-    response = KakaoResponse()
-    for component in components:
-        response.add_component(component)
-    return response.get_dict()
+    return KakaoResponse(
+        component_list=make_shuttle_info_components(shuttle_images)
+    ).get_dict()

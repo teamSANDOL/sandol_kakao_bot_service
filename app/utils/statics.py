@@ -7,13 +7,21 @@ from kakao_chatbot.response.components import (
     ListCardComponent,
     CarouselComponent,
     ItemCardComponent,
+    SimpleImageComponent,
+    SimpleTextComponent,
+    Link,
 )
+from kakao_chatbot.response.base import ParentComponent
 
 from app.config import logger
 from app.schemas.statics import (
     OrganizationUnit,
     OrganizationGroup,
 )
+
+
+MAX_SIMPLE_IMAGE_COMPONENTS = 3
+CAROUSEL_LIST_CARD_CHUNK_SIZE = 4
 
 
 def make_org_group_list(
@@ -70,6 +78,56 @@ def make_org_group_list(
         if len(target_group) <= 5
         else CarouselComponent(*target_list)
         )  # 5개 이하일 경우 ListCardComponent 반환, 그 외에는 CarouselComponent 반환
+
+
+def make_shuttle_info_components(image_urls: list[str]) -> list[ParentComponent]:
+    """셔틀버스 이미지 정보를 카카오 응답 컴포넌트로 변환합니다.
+
+    카카오 응답은 최대 3개의 ParentComponent만 포함할 수 있으므로, 이미지가
+    4개 이상인 경우 이미지 직접 표시 대신 링크 목록 카드 하나로 폴백합니다.
+    """
+    if not image_urls:
+        return [SimpleTextComponent("셔틀버스 정보가 없습니다.")]
+
+    if len(image_urls) <= MAX_SIMPLE_IMAGE_COMPONENTS:
+        return [
+            SimpleImageComponent(image_url, "셔틀버스 정보 사진")
+            for image_url in image_urls
+        ]
+
+    return [make_shuttle_image_link_component(image_urls)]
+
+
+def make_shuttle_image_link_component(
+    image_urls: list[str],
+) -> ListCardComponent | CarouselComponent:
+    """셔틀버스 이미지 URL 목록을 리스트 카드 또는 캐러셀로 반환합니다."""
+    header = "셔틀버스 이미지 바로가기"
+
+    if len(image_urls) <= ListCardComponent(header="").max_items:
+        list_card = ListCardComponent(header=header)
+        for index, image_url in enumerate(image_urls, start=1):
+            list_card.add_item(
+                title=f"셔틀버스 정보 {index}",
+                description="이미지 링크 열기",
+                link=Link(web=image_url),
+            )
+        return list_card
+
+    carousel = CarouselComponent()
+    for start in range(0, len(image_urls), CAROUSEL_LIST_CARD_CHUNK_SIZE):
+        list_card = ListCardComponent(header=header, max_items=4)
+        for index, image_url in enumerate(
+            image_urls[start : start + CAROUSEL_LIST_CARD_CHUNK_SIZE],
+            start=start + 1,
+        ):
+            list_card.add_item(
+                title=f"셔틀버스 정보 {index}",
+                description="이미지 링크 열기",
+                link=Link(web=image_url),
+            )
+        carousel.add_item(list_card)
+    return carousel
 
 
 def phone_number_format(phone_number: str) -> str:
