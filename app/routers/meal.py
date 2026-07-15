@@ -17,7 +17,7 @@ from kakao_chatbot.response import KakaoResponse, QuickReply, ActionEnum
 from kakao_chatbot.response.components import SimpleTextComponent, ItemCardComponent
 from kakao_chatbot.response.components import ImageTitle
 
-from app.config import Config, logger
+from app.config import logger
 from app.config.blocks import BlockID
 from app.schemas.meals import (
     MealCard,
@@ -42,6 +42,7 @@ from app.utils.kakao import (
 )
 from app.utils.meal import (
     extract_menu,
+    has_menu_context,
     make_meal_cards,
     meal_error_response_maker,
     meal_response_maker,
@@ -70,7 +71,7 @@ meal_router = APIRouter(prefix="/meal")
 async def meal_view(
     payload: Annotated[Payload, Depends(parse_payload)],
     client: Annotated[AsyncClient, Depends(get_async_client)],
-) -> dict:
+) -> dict[str, object]:
     """식단 정보를 Carousel TextCard 형태로 반환합니다.
 
     등록된 식당 정보를 불러와 어제 7시 이후 등록된 식당 정보를 먼저 배치합니다.
@@ -190,7 +191,7 @@ async def meal_view(
 async def meal_restaurant(
     payload: Annotated[Payload, Depends(parse_payload)],
     client: Annotated[AsyncClient, Depends(get_async_client)],
-) -> dict:
+) -> dict[str, object]:
     """식당 정보를 반환하는 API입니다.
 
     식당의 운영시간, 위치, 가격 등의 정보를 반환합니다.
@@ -295,7 +296,7 @@ async def meal_delete(
         RestaurantResponse,
         Depends(select_restaurant),
     ],
-) -> dict:
+) -> dict[str, object]:
     """삭제할 메뉴를 선택하는 API입니다.
 
     meal_type에 해당하는 식사 종류의 메뉴를 삭제할 수 있도록
@@ -385,7 +386,7 @@ async def meal_delete_all(
         RestaurantResponse,
         Depends(select_restaurant),
     ],
-) -> dict:
+) -> dict[str, object]:
     """모든 메뉴를 삭제하는 API입니다.
 
     모든 메뉴를 삭제하고 삭제된 결과를 응답으로 반환합니다.
@@ -447,7 +448,7 @@ async def meal_menu_delete(
         RestaurantResponse,
         Depends(select_restaurant),
     ],
-) -> dict:
+) -> dict[str, object]:
     """선택한 메뉴를 삭제하는 API입니다.
 
     meal_delete API에서 선택한 메뉴를 삭제합니다.
@@ -563,7 +564,7 @@ async def meal_register(
         RestaurantResponse,
         Depends(select_restaurant),
     ],
-) -> dict:
+) -> dict[str, object]:
     """식단 정보를 등록합니다.
 
     중식 등록 및 석식 등록 스킬을 처리합니다.
@@ -739,18 +740,27 @@ async def meal_submit(
     lunch_menu = extract_menu(contexts, "lunch_menu", restaurant.name)
     dinner_menu = extract_menu(contexts, "dinner_menu", restaurant.name)
 
+    menus_to_submit: list[tuple[MealType, str, list[str]]] = []
+    if has_menu_context(contexts, "lunch_menu", restaurant.name):
+        menus_to_submit.append((MealType.lunch, "lunch_menu", lunch_menu))
+    if has_menu_context(contexts, "dinner_menu", restaurant.name):
+        menus_to_submit.append((MealType.dinner, "dinner_menu", dinner_menu))
+
+    if not menus_to_submit:
+        return meal_error_response_maker("등록할 메뉴가 없습니다.").get_dict()
+
     # 식당 정보를 확정 등록
     results = await asyncio.gather(
-        post_meal(MealType.lunch, lunch_menu, restaurant.id, client),
-        post_meal(MealType.dinner, dinner_menu, restaurant.id, client),
+        *(
+            post_meal(meal_type, menu, restaurant.id, client)
+            for meal_type, _, menu in menus_to_submit
+        ),
         return_exceptions=True,
     )
 
     # 예외 여부 확인 및 메시지 작성
     errors = []
-    for meal_type, result in zip(
-        [MealType.lunch, MealType.dinner], results, strict=False
-    ):
+    for (meal_type, _, _), result in zip(menus_to_submit, results, strict=False):
         if isinstance(result, Exception):
             logger.error(
                 "식단 확정 실패: user_id=%s, restaurant_name=%s, meal_type=%s, error=%s",
@@ -789,22 +799,15 @@ async def meal_submit(
     response.add_component(submit_message)
     response.add_component(lunch_carousel)
     response.add_component(dinner_carousel)
-    contexts = save_menu(
-        contexts,
-        "lunch_menu",
-        restaurant.name,
-        [],
-        lifespan=0,
-        ttl=0,
-    )
-    contexts = save_menu(
-        contexts,
-        "dinner_menu",
-        restaurant.name,
-        [],
-        lifespan=0,
-        ttl=0,
-    )
+    for _, context_name, _ in menus_to_submit:
+        contexts = save_menu(
+            contexts,
+            context_name,
+            restaurant.name,
+            [],
+            lifespan=0,
+            ttl=0,
+        )
     response.contexts = contexts
     logger.info(
         "식단 확정 완료: user_id=%s, restaurant_name=%s",
