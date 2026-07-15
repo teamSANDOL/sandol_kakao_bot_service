@@ -29,6 +29,13 @@ from app.utils.http import XUserIDClient
 from app.utils.kakao import KakaoError, parse_payload
 
 
+MENU_CONTEXT_ERROR_MESSAGE = (
+    "혹시 중식, 석식을 고르셨나요? 아직 고르지 않으셨다면 '메뉴등록'을 입력한 뒤 "
+    "어떤 종류의 메뉴를 등록하실지 선택해주세요! 만약, 올바르게 선택하신 뒤에도 "
+    "이 메시지가 계속해서 나온다면 운영진에게 연락해주세요."
+)
+
+
 def make_meal_card(meal: MealCard) -> TextCardComponent:
     """식당의 식단 정보를 TextCard 형식으로 반환합니다.
 
@@ -247,11 +254,35 @@ def extract_menu(contexts, meal_type_name, restaurant_name) -> list[str]:
     return []
 
 
+def has_menu_context(
+    contexts: list[Context], meal_type_name: str, restaurant_name: str
+) -> bool:
+    """컨텍스트에 특정 식사 종류 메뉴 정보가 실제로 존재하는지 확인합니다.
+
+    Args:
+        contexts (list[Context]): 컨텍스트 리스트입니다.
+        meal_type_name (str): 식사 종류 이름입니다.
+        restaurant_name (str): 식당 이름입니다.
+
+    Returns:
+        bool: 해당 식당의 메뉴 컨텍스트가 있으면 True입니다.
+    """
+    context: Optional[Context] = next(
+        (ctx for ctx in contexts if ctx.name == meal_type_name), None
+    )
+    return bool(
+        context
+        and isinstance(context.params.get("menu_list"), ContextParam)
+        and isinstance(context.params.get("restaurant_name"), ContextParam)
+        and context.params["restaurant_name"].value == restaurant_name
+    )
+
+
 def save_menu(
     contexts: list[Context],
     meal_type_name: str,
     restaurant_name: str,
-    menu_list: list,
+    menu_list: list[str],
     lifespan: int = 5,
     ttl: int = 300,
     add_mode: bool = False,
@@ -294,6 +325,8 @@ def save_menu(
             ttl=ttl,
         )
         contexts.append(new_context)
+    else:
+        raise KakaoError(MENU_CONTEXT_ERROR_MESSAGE)
     return contexts
 
 
