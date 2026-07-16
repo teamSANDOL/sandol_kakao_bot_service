@@ -2,7 +2,7 @@
 
 from typing import Any, List, Literal, Optional
 
-from httpx import AsyncClient
+from httpx import AsyncClient, HTTPStatusError
 
 from app.config import Config, logger
 from app.schemas.meals import MealType, MealResponse, RestaurantResponse
@@ -24,13 +24,29 @@ async def fetch_latest_meals(
     Returns:
         List[MealResponse]: 식사 정보 리스트
     """
+    logger.info("최신 식단 조회 요청 시작: restaurant_id=%s", restaurant_id)
     if not restaurant_id:
         response = await client.get(f"{Config.MEAL_SERVICE_URL}/meals/latest")
     else:
         response = await client.get(
             (f"{Config.MEAL_SERVICE_URL}/meals/restaurant/{restaurant_id}/latest")
         )
-    response.raise_for_status()
+    logger.info(
+        "최신 식단 조회 응답 수신: restaurant_id=%s, status_code=%s, body=%s",
+        restaurant_id,
+        response.status_code,
+        response.text,
+    )
+    try:
+        response.raise_for_status()
+    except HTTPStatusError:
+        logger.error(
+            "최신 식단 조회 HTTP 오류: restaurant_id=%s, status_code=%s, body=%s",
+            restaurant_id,
+            response.status_code,
+            response.text,
+        )
+        raise
     list_data = response.json().get("data", [])
 
     # Pydantic 모델을 사용하여 JSON 데이터를 직접 변환
@@ -150,12 +166,83 @@ async def post_meal(
     Returns:
         dict: 등록된 식단 정보
     """
+    logger.info(
+        "식단 upstream 등록 요청 준비: restaurant_id=%s, meal_type=%s, "
+        "raw_menu_count=%d, raw_menu=%s",
+        restaurant_id,
+        meal_type.value,
+        len(menu),
+        menu,
+    )
+    menu_items = [item.strip() for item in menu if item.strip()]
+    if not menu_items:
+        logger.error(
+            "식단 upstream 등록 중단: restaurant_id=%s, meal_type=%s, "
+            "reason=empty_menu_after_strip, raw_menu=%s",
+            restaurant_id,
+            meal_type.value,
+            menu,
+        )
+        raise ValueError("등록할 메뉴가 없습니다.")
+
+    request_body = {
+        "meal_type": meal_type,
+        "menu": menu_items,
+    }
+    logger.info(
+        "식단 upstream 등록 요청 전송: restaurant_id=%s, meal_type=%s, "
+        "menu_count=%d, request_body=%s",
+        restaurant_id,
+        meal_type.value,
+        len(menu_items),
+        request_body,
+    )
     response = await client.post(
         f"{Config.MEAL_SERVICE_URL}/meals/{restaurant_id}",
-        json={
-            "meal_type": meal_type,
-            "menu": menu,
-        },
+        json=request_body,
+    )
+    logger.info(
+        "식단 upstream 등록 응답 수신: restaurant_id=%s, meal_type=%s, "
+        "status_code=%s, body=%s",
+        restaurant_id,
+        meal_type.value,
+        response.status_code,
+        response.text,
+    )
+    try:
+        response.raise_for_status()
+    except HTTPStatusError:
+        logger.error(
+            "식단 upstream 등록 HTTP 오류: restaurant_id=%s, meal_type=%s, "
+            "status_code=%s, body=%s, request_body=%s",
+            restaurant_id,
+            meal_type.value,
+            response.status_code,
+            response.text,
+            request_body,
+        )
+        raise
+    is_created = response.status_code == Config.HttpStatus.CREATED
+    logger.info(
+        "식단 upstream 등록 완료: restaurant_id=%s, meal_type=%s, "
+        "created=%s, status_code=%s",
+        restaurant_id,
+        meal_type.value,
+        is_created,
+        response.status_code,
+    )
+    return is_created
+
+
+async def post_restaurant_manager_application(
+    restaurant_id: int,
+    client: XUserIDClient,
+) -> int | None:
+    """식당 manager 등록 신청을 생성합니다."""
+    response = await client.post(
+        f"{Config.MEAL_SERVICE_URL}/restaurants/{restaurant_id}/manager-requests"
     )
     response.raise_for_status()
-    return response.status_code == Config.HttpStatus.CREATED
+    data = response.json().get("data", {})
+    request_id = data.get("request_id") if isinstance(data, dict) else None
+    return request_id if isinstance(request_id, int) else None

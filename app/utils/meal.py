@@ -26,7 +26,7 @@ from app.services.meal_service import fetch_my_restaurants
 from app.services.user_service import get_current_user, get_xuser_client_by_payload
 from app.utils import get_korean_day
 from app.utils.http import XUserIDClient
-from app.utils.kakao import KakaoError, parse_payload
+from app.utils.kakao import KakaoError, extract_text_value, parse_payload
 
 
 MENU_CONTEXT_ERROR_MESSAGE = (
@@ -242,7 +242,19 @@ def extract_menu(contexts, meal_type_name, restaurant_name) -> list[str]:
         and isinstance(context.params.get("restaurant_name"), ContextParam)
         and context.params["restaurant_name"].value == restaurant_name
     ):
-        return json.loads(context.params["menu_list"].value)
+        menu_list = json.loads(context.params["menu_list"].value)
+        logger.info(
+            "메뉴 context 추출 성공: meal_type_context=%s, requested_restaurant=%s, "
+            "context_restaurant=%s, menu_count=%d, menu=%s, lifespan=%s, ttl=%s",
+            meal_type_name,
+            restaurant_name,
+            context.params["restaurant_name"].value,
+            len(menu_list),
+            menu_list,
+            context.lifespan,
+            context.ttl,
+        )
+        return menu_list
     logger.warning(
         "메뉴 타입 추출 실패\n식사 종류: %s\n식당 이름: %s \n컨텍스트: %s \n컨텍스트 param: %s \n컨텍스트 menu_list: %s",
         meal_type_name,
@@ -252,6 +264,41 @@ def extract_menu(contexts, meal_type_name, restaurant_name) -> list[str]:
         context.params.get("menu_list") if context and context.params else "없음",
     )
     return []
+
+
+def summarize_menu_contexts(contexts: list[Context]) -> list[dict[str, object]]:
+    """식단 등록 context를 INFO 로그에 남기기 좋은 형태로 요약합니다."""
+    summaries: list[dict[str, object]] = []
+    for context in contexts:
+        if context.name not in {"lunch_menu", "dinner_menu"}:
+            continue
+
+        menu_list_param = context.params.get("menu_list")
+        restaurant_name_param = context.params.get("restaurant_name")
+        menu_items: list[str] = []
+        if isinstance(menu_list_param, ContextParam):
+            try:
+                parsed_menu = json.loads(menu_list_param.value)
+            except json.JSONDecodeError:
+                parsed_menu = []
+            if isinstance(parsed_menu, list):
+                menu_items = [str(item) for item in parsed_menu]
+
+        restaurant_name = ""
+        if isinstance(restaurant_name_param, ContextParam):
+            restaurant_name = extract_text_value(restaurant_name_param.value) or ""
+
+        summaries.append(
+            {
+                "context": context.name,
+                "restaurant_name": restaurant_name,
+                "menu_count": len(menu_items),
+                "menu": menu_items,
+                "lifespan": context.lifespan,
+                "ttl": context.ttl,
+            }
+        )
+    return summaries
 
 
 def has_menu_context(
@@ -270,15 +317,67 @@ def has_menu_context(
     context: Optional[Context] = next(
         (ctx for ctx in contexts if ctx.name == meal_type_name), None
     )
-    return bool(
+    if not context:
+        logger.info(
+            "메뉴 context 확인 실패: reason=missing_context, "
+            "meal_type_context=%s, requested_restaurant=%s, available_contexts=%s",
+            meal_type_name,
+            restaurant_name,
+            [context.name for context in contexts],
+        )
+        return False
+
+    menu_list_param = context.params.get("menu_list")
+    restaurant_name_param = context.params.get("restaurant_name")
+    if not isinstance(menu_list_param, ContextParam):
+        logger.info(
+            "메뉴 context 확인 실패: reason=missing_menu_list, "
+            "meal_type_context=%s, requested_restaurant=%s, context_params=%s",
+            meal_type_name,
+            restaurant_name,
+            context.params,
+        )
+        return False
+    if not isinstance(restaurant_name_param, ContextParam):
+        logger.info(
+            "메뉴 context 확인 실패: reason=missing_restaurant_name, "
+            "meal_type_context=%s, requested_restaurant=%s, context_params=%s",
+            meal_type_name,
+            restaurant_name,
+            context.params,
+        )
+        return False
+
+    has_context = bool(
         context
-        and isinstance(context.params.get("menu_list"), ContextParam)
-        and isinstance(context.params.get("restaurant_name"), ContextParam)
-        and context.params["restaurant_name"].value == restaurant_name
+        and menu_list_param
+        and restaurant_name_param.value == restaurant_name
     )
+    if has_context:
+        logger.info(
+            "메뉴 context 확인 성공: meal_type_context=%s, requested_restaurant=%s, "
+            "context_restaurant=%s, menu_value=%s, lifespan=%s, ttl=%s",
+            meal_type_name,
+            restaurant_name,
+            restaurant_name_param.value,
+            menu_list_param.value,
+            context.lifespan,
+            context.ttl,
+        )
+    else:
+        logger.info(
+            "메뉴 context 확인 실패: reason=restaurant_mismatch, "
+            "meal_type_context=%s, requested_restaurant=%s, context_restaurant=%s, "
+            "menu_value=%s",
+            meal_type_name,
+            restaurant_name,
+            restaurant_name_param.value,
+            menu_list_param.value,
+        )
+    return has_context
 
 
-def save_menu(
+def save_menu(  # noqa: PLR0913
     contexts: list[Context],
     meal_type_name: str,
     restaurant_name: str,
@@ -303,6 +402,17 @@ def save_menu(
     Returns:
         list[Context]: 저장된 메뉴 리스트입니다.
     """
+    logger.info(
+        "식단 context 저장 시작: meal_type_context=%s, restaurant_name=%s, "
+        "menu_count=%d, menu=%s, add_mode=%s, lifespan=%d, ttl=%d",
+        meal_type_name,
+        restaurant_name,
+        len(menu_list),
+        menu_list,
+        add_mode,
+        lifespan,
+        ttl,
+    )
     logger.debug("메뉴 저장\n식사 종류: %s", meal_type_name)
     context: Optional[Context] = next(
         (ctx for ctx in contexts if ctx.name == meal_type_name), None
@@ -312,7 +422,30 @@ def save_menu(
         # 기존 메뉴가 있는 경우 삭제
         if add_mode and isinstance(context.params.get("menu_list"), ContextParam):
             # 메뉴 추가 모드인 경우 기존 메뉴에 추가
+            previous_menu = json.loads(context.params["menu_list"].value)
+            previous_restaurant_name_param = context.params.get("restaurant_name")
+            logger.info(
+                "식단 context 기존 값 확인: meal_type_context=%s, "
+                "previous_restaurant_name=%s, previous_menu_count=%d, "
+                "previous_menu=%s, previous_lifespan=%s, previous_ttl=%s",
+                meal_type_name,
+                previous_restaurant_name_param.value
+                if isinstance(previous_restaurant_name_param, ContextParam)
+                else None,
+                len(previous_menu),
+                previous_menu,
+                context.lifespan,
+                context.ttl,
+            )
             menu_list = json.loads(context.params["menu_list"].value) + menu_list
+            logger.info(
+                "식단 context 기존 메뉴 병합: meal_type_context=%s, "
+                "restaurant_name=%s, merged_menu_count=%d, merged_menu=%s",
+                meal_type_name,
+                restaurant_name,
+                len(menu_list),
+                menu_list,
+            )
         contexts.remove(context)
         menu_str = json.dumps(menu_list, ensure_ascii=False)
         new_context = Context(
@@ -325,7 +458,22 @@ def save_menu(
             ttl=ttl,
         )
         contexts.append(new_context)
+        logger.info(
+            "식단 context 저장 완료: meal_type_context=%s, restaurant_name=%s, "
+            "menu_count=%d, contexts=%s",
+            meal_type_name,
+            restaurant_name,
+            len(menu_list),
+            summarize_menu_contexts(contexts),
+        )
     else:
+        logger.error(
+            "식단 context 저장 실패: meal_type_context=%s, restaurant_name=%s, "
+            "available_contexts=%s",
+            meal_type_name,
+            restaurant_name,
+            [context.name for context in contexts],
+        )
         raise KakaoError(MENU_CONTEXT_ERROR_MESSAGE)
     return contexts
 
@@ -352,7 +500,10 @@ def establishment_type_to_string(establishment_type: str) -> str:
 
 
 def meal_response_maker(
-    lunch: CarouselComponent, dinner: CarouselComponent, is_temp: bool = True
+    lunch: CarouselComponent,
+    dinner: CarouselComponent,
+    is_temp: bool = True,
+    restaurant_name: str | None = None,
 ) -> KakaoResponse:
     """식단 정보 미리보기를 반환하는 응답을 생성합니다.
 
@@ -362,6 +513,7 @@ def meal_response_maker(
         is_temp (bool): 임시 응답 여부
             True인 경우, "식단 미리보기"라는 제목이 추가됩니다.
             False인 경우, 제목이 추가되지 않습니다.
+        restaurant_name (str | None): QuickReply에 보존할 식당 이름입니다.
 
     Returns:
         KakaoResponse: 식단 정보 미리보기 응답
@@ -371,16 +523,34 @@ def meal_response_maker(
         response += SimpleTextComponent("식단 미리보기")
     response += lunch
     response += dinner
-    for quick_reply in get_cafeteria_register_quick_replies():
+    quick_replies = get_cafeteria_register_quick_replies(restaurant_name)
+    logger.info(
+        "식단 등록 응답 QuickReply 생성: is_temp=%s, restaurant_name=%s, "
+        "quick_replies=%s",
+        is_temp,
+        restaurant_name,
+        [
+            {
+                "label": quick_reply.label,
+                "block_id": quick_reply.block_id,
+                "extra": quick_reply.extra,
+            }
+            for quick_reply in quick_replies
+        ],
+    )
+    for quick_reply in quick_replies:
         response.add_quick_reply(quick_reply)
     return response
 
 
-def meal_error_response_maker(message: str) -> KakaoResponse:
+def meal_error_response_maker(
+    message: str, restaurant_name: str | None = None
+) -> KakaoResponse:
     """식단 정보 에러 메시지를 반환하는 응답을 생성합니다.
 
     Args:
         message (str): 에러 메시지
+        restaurant_name (str | None): QuickReply에 보존할 식당 이름입니다.
 
     Returns:
         KakaoResponse: 에러 메시지 응답
@@ -388,10 +558,43 @@ def meal_error_response_maker(message: str) -> KakaoResponse:
     response = KakaoResponse()
     simple = SimpleTextComponent(message)
     response.add_component(simple)
-    for quick_reply in get_cafeteria_register_quick_replies():
+    quick_replies = get_cafeteria_register_quick_replies(restaurant_name)
+    logger.info(
+        "식단 등록 에러 응답 QuickReply 생성: message=%s, restaurant_name=%s, "
+        "quick_replies=%s",
+        message,
+        restaurant_name,
+        [
+            {
+                "label": quick_reply.label,
+                "block_id": quick_reply.block_id,
+                "extra": quick_reply.extra,
+            }
+            for quick_reply in quick_replies
+        ],
+    )
+    for quick_reply in quick_replies:
         response.add_quick_reply(quick_reply)
 
     return response
+
+
+def extract_restaurant_name_from_menu_contexts(contexts: list[Context]) -> str:
+    """식단 등록 context에서 식당 이름을 추출합니다."""
+    restaurant_names: list[str] = []
+    for context in contexts:
+        if context.name not in {"lunch_menu", "dinner_menu"}:
+            continue
+        restaurant_name_param = context.params.get("restaurant_name")
+        if not isinstance(restaurant_name_param, ContextParam):
+            continue
+        restaurant_name = extract_text_value(restaurant_name_param.value)
+        if restaurant_name and restaurant_name not in restaurant_names:
+            restaurant_names.append(restaurant_name)
+
+    if len(restaurant_names) == 1:
+        return restaurant_names[0]
+    return ""
 
 
 async def get_my_restaurants(
@@ -439,14 +642,54 @@ async def select_restaurant(
         user.kakao_id,
         [restaurant.name for restaurant in restaurants],
     )
-    restaurant_name: str = payload.action.client_extra.get("restaurant_name", "")
+    restaurant_name = extract_text_value(
+        payload.action.client_extra.get("restaurant_name")
+    )
+    restaurant_name_source = "client_extra" if restaurant_name else ""
+    if not restaurant_name:
+        restaurant_name = extract_restaurant_name_from_menu_contexts(payload.contexts)
+        restaurant_name_source = "menu_context" if restaurant_name else ""
+    logger.info(
+        "식당 선택 입력 확인: user_id=%s, restaurant_name=%s, source=%s, "
+        "menu_contexts=%s",
+        payload.user_id,
+        restaurant_name or None,
+        restaurant_name_source or "not_found",
+        summarize_menu_contexts(payload.contexts),
+    )
     if restaurant_name:
         # 사용자가 선택한 식당이 있는 경우
         for restaurant in restaurants:
             if restaurant.name == restaurant_name:
+                logger.info(
+                    "식당 선택 완료: user_id=%s, restaurant_id=%s, "
+                    "restaurant_name=%s, source=%s",
+                    payload.user_id,
+                    restaurant.id,
+                    restaurant.name,
+                    restaurant_name_source,
+                )
                 return restaurant
+        logger.info(
+            "식당 선택 후보 불일치: user_id=%s, requested_restaurant_name=%s, "
+            "source=%s, candidates=%s",
+            payload.user_id,
+            restaurant_name,
+            restaurant_name_source,
+            [
+                {"restaurant_id": restaurant.id, "restaurant_name": restaurant.name}
+                for restaurant in restaurants
+            ],
+        )
 
     if len(restaurants) == 1:
+        logger.info(
+            "식당 단일 후보 자동 선택: user_id=%s, restaurant_id=%s, "
+            "restaurant_name=%s",
+            payload.user_id,
+            restaurants[0].id,
+            restaurants[0].name,
+        )
         return restaurants[0]
 
     logger.info(
@@ -456,6 +699,15 @@ async def select_restaurant(
 
     response = KakaoResponse()
     if payload.flow is None:
+        logger.error(
+            "식당 선택 요청 생성 실패: reason=missing_payload_flow, user_id=%s, "
+            "candidates=%s",
+            payload.user_id,
+            [
+                {"restaurant_id": restaurant.id, "restaurant_name": restaurant.name}
+                for restaurant in restaurants
+            ],
+        )
         raise KakaoError(response)
     text_card = TextCardComponent(
         title="식당 선택",

@@ -137,8 +137,28 @@ async def parse_payload(request: Request) -> Payload:
     Request에서 JSON 데이터를 추출하여 Payload 객체로 변환합니다.
     FastAPI의 Dependency Injection을 사용하기 위한 함수입니다.
     """
-    payload = Payload.from_dict(await request.json())
-    logger.debug("사용자 요청\n%s", await request.body())
+    raw_body = await request.body()
+    body_json = await request.json()
+    payload = Payload.from_dict(body_json)
+    logger.info(
+        "카카오 요청 파싱 완료: path=%s, user_id=%s, detail_params=%s, "
+        "client_extra=%s, contexts=%s, raw_body=%s",
+        request.url.path,
+        payload.user_id,
+        dump_kakao_value_json(payload.action.detail_params),
+        dump_kakao_value_json(payload.action.client_extra),
+        [
+            {
+                "name": context.name,
+                "params": to_jsonable_kakao_value(context.params),
+                "lifespan": context.lifespan,
+                "ttl": context.ttl,
+            }
+            for context in payload.contexts
+        ],
+        raw_body.decode("utf-8", errors="replace"),
+    )
+    logger.debug("사용자 요청\n%s", raw_body)
     return payload
 
 
