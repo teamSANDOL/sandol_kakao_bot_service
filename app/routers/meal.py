@@ -17,7 +17,7 @@ from kakao_chatbot.response import KakaoResponse, QuickReply, ActionEnum
 from kakao_chatbot.response.components import SimpleTextComponent, ItemCardComponent
 from kakao_chatbot.response.components import ImageTitle
 
-from app.config import logger
+from app.config import Config, logger
 from app.config.blocks import BlockID
 from app.schemas.meals import (
     MealCard,
@@ -31,6 +31,7 @@ from app.services.meal_service import (
     fetch_restaurants,
     fetch_restaurant_by_name,
     post_meal,
+    post_restaurant_manager_application,
 )
 from app.services.user_service import get_xuser_client_by_payload, get_current_user
 from app.utils.http import XUserIDClient, get_async_client
@@ -46,6 +47,7 @@ from app.utils.meal import (
     make_meal_cards,
     meal_error_response_maker,
     meal_response_maker,
+    summarize_menu_contexts,
     sort_meals_for_display,
     save_menu,
     select_restaurant,
@@ -68,7 +70,7 @@ meal_router = APIRouter(prefix="/meal")
         utterance="학식 미가",
     ),
 )
-async def meal_view(
+async def meal_view(  # noqa: C901
     payload: Annotated[Payload, Depends(parse_payload)],
     client: Annotated[AsyncClient, Depends(get_async_client)],
 ) -> dict[str, object]:
@@ -281,6 +283,83 @@ async def meal_restaurant(
 
 
 @meal_router.post(
+    "/manager/apply",
+    openapi_extra=create_openapi_extra(
+        detail_params={
+            "Cafeteria": {
+                "origin": "미가",
+                "value": "미가식당",
+            },
+        },
+        utterance="매니저 신청 미가식당",
+    ),
+)
+async def meal_manager_apply(
+    payload: Annotated[Payload, Depends(parse_payload)],
+    user: Annotated[User, Depends(get_current_user)],
+    client: Annotated[XUserIDClient, Depends(get_xuser_client_by_payload)],
+) -> dict[str, object]:
+    """카카오톡 챗봇에서 식당 manager 등록 신청을 접수합니다."""
+    _ = user
+    cafeteria = payload.action.detail_params.get("Cafeteria")
+    logger.debug(
+        "Manager 신청 요청 수신: kakao_id=%s, cafeteria=%s",
+        payload.user_id,
+        dump_kakao_value_json(cafeteria),
+    )
+    restaurant_name = extract_text_value(getattr(cafeteria, "value", None))
+    if not restaurant_name:
+        restaurant_name = extract_text_value(
+            payload.action.client_extra.get("restaurant_name")
+        )
+    if not restaurant_name:
+        return (
+            KakaoResponse()
+            .add_component(SimpleTextComponent("manager 신청할 식당 이름을 입력해주세요."))
+            .get_dict()
+        )
+
+    restaurant = await fetch_restaurant_by_name(restaurant_name, client)
+    if restaurant is None:
+        return (
+            KakaoResponse()
+            .add_component(SimpleTextComponent("식당 정보를 찾을 수 없습니다."))
+            .get_dict()
+        )
+
+    try:
+        request_id = await post_restaurant_manager_application(restaurant.id, client)
+    except HTTPStatusError as exc:
+        status_code = exc.response.status_code
+        if status_code == Config.HttpStatus.CONFLICT:
+            message = "이미 manager로 등록되어 있거나 처리 대기 중인 신청이 있습니다."
+        elif status_code == Config.HttpStatus.BAD_REQUEST:
+            message = "해당 식당에는 manager 신청을 할 수 없습니다."
+        elif status_code == Config.HttpStatus.UNAUTHORIZED:
+            message = "로그인 후 다시 시도해주세요."
+        else:
+            message = "manager 신청 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
+        logger.warning(
+            "Manager 신청 실패: kakao_id=%s, restaurant_id=%s, status=%s",
+            payload.user_id,
+            restaurant.id,
+            status_code,
+        )
+        return KakaoResponse().add_component(SimpleTextComponent(message)).get_dict()
+
+    suffix = f" 신청 번호는 #{request_id}입니다." if request_id is not None else ""
+    return (
+        KakaoResponse()
+        .add_component(
+            SimpleTextComponent(
+                f"{restaurant.name} manager 등록 신청이 접수되었습니다.{suffix}"
+            )
+        )
+        .get_dict()
+    )
+
+
+@meal_router.post(
     "/register/delete/{meal_type}",
     openapi_extra=create_openapi_extra(
         client_extra={
@@ -328,7 +407,13 @@ async def meal_delete(
         str: 삭제할 수 있는 메뉴 리스트를 반환합니다.
     """
     logger.info(
-        "메뉴 삭제 요청 수신: kakao_id=%s, meal_type=%s", payload.user_id, meal_type
+        "메뉴 삭제 선택 요청 수신: user_id=%s, restaurant_id=%s, "
+        "restaurant_name=%s, meal_type=%s, contexts=%s",
+        payload.user_id,
+        restaurant.id,
+        restaurant.name,
+        meal_type,
+        summarize_menu_contexts(payload.contexts),
     )
 
     # meal_type에 해당하는 메뉴 리스트를 불러와 퀵리플라이로 반환
@@ -348,10 +433,14 @@ async def meal_delete(
     response = KakaoResponse()
     simple_text = SimpleTextComponent("삭제할 메뉴를 선택해주세요.")
     response = response.add_component(simple_text)
-    logger.debug(
-        "삭제 가능한 메뉴 리스트 생성: kakao_id=%s, meal_type=%s, menu_list=%s",
+    logger.info(
+        "삭제 가능한 메뉴 리스트 생성: user_id=%s, restaurant_id=%s, "
+        "restaurant_name=%s, meal_type=%s, menu_count=%d, menu=%s",
         payload.user_id,
+        restaurant.id,
+        restaurant.name,
         meal_type,
+        len(memu_list),
         memu_list,
     )
     for menu in memu_list:
@@ -359,13 +448,21 @@ async def meal_delete(
             label=menu,
             action=ActionEnum.BLOCK,
             block_id=BlockID.DELETE_MENU,
-            extra={"meal_type": meal_type, "menu": menu},
+            extra={
+                "meal_type": meal_type,
+                "menu": menu,
+                "restaurant_name": restaurant.name,
+            },
         )
         response += quick_reply
     logger.info(
-        "메뉴 삭제 리스트 반환 완료: kakao_id=%s, meal_type=%s",
+        "메뉴 삭제 리스트 반환 완료: user_id=%s, restaurant_id=%s, "
+        "restaurant_name=%s, meal_type=%s, quick_reply_count=%d",
         payload.user_id,
+        restaurant.id,
+        restaurant.name,
         meal_type,
+        len(memu_list),
     )
     return response.get_dict()
 
@@ -403,9 +500,14 @@ async def meal_delete_all(
     Returns:
         str: 모든 메뉴가 삭제되었음을 반환합니다.
     """
-    logger.info("모든 메뉴 삭제 요청 수신: user_id=%s", payload.user_id)
-
-    logger.debug("모든 메뉴 삭제: user_id=%s", payload.user_id)
+    logger.info(
+        "모든 메뉴 삭제 요청 수신: user_id=%s, restaurant_id=%s, "
+        "restaurant_name=%s, contexts_before=%s",
+        payload.user_id,
+        restaurant.id,
+        restaurant.name,
+        summarize_menu_contexts(payload.contexts),
+    )
     contexts: List[Context] = deepcopy(payload.contexts)
     contexts = save_menu(
         contexts,
@@ -424,10 +526,19 @@ async def meal_delete_all(
         ttl=0,
     )
     lunch, dinner = make_meal_cards([], [])
-    response = meal_response_maker(lunch, dinner, is_temp=False)
+    response = meal_response_maker(
+        lunch, dinner, is_temp=False, restaurant_name=restaurant.name
+    )
     response.add_component(SimpleTextComponent("모든 메뉴가 삭제되었습니다."))
     response.contexts = contexts
-    logger.info("모든 메뉴 삭제 완료: user_id=%s", payload.user_id)
+    logger.info(
+        "모든 메뉴 삭제 완료: user_id=%s, restaurant_id=%s, "
+        "restaurant_name=%s, contexts_after=%s",
+        payload.user_id,
+        restaurant.id,
+        restaurant.name,
+        summarize_menu_contexts(contexts),
+    )
     return response.get_dict()
 
 
@@ -471,7 +582,15 @@ async def meal_menu_delete(
     Returns:
         str: 메뉴가 삭제된 결과를 반환합니다.
     """
-    logger.info("메뉴 삭제 요청 수신: user_id=%s", payload.user_id)
+    logger.info(
+        "메뉴 삭제 실행 요청 수신: user_id=%s, restaurant_id=%s, "
+        "restaurant_name=%s, client_extra=%s, contexts=%s",
+        payload.user_id,
+        restaurant.id,
+        restaurant.name,
+        payload.action.client_extra,
+        summarize_menu_contexts(payload.contexts),
+    )
 
     meal_type = payload.action.client_extra.get("meal_type", "")
     menu = payload.action.client_extra.get("menu", "")
@@ -480,15 +599,22 @@ async def meal_menu_delete(
             "메뉴 삭제 실패: user_id=%s, meal_type=None, menu=None",
             payload.user_id,
         )
-        return meal_error_response_maker("삭제할 메뉴를 입력해주세요.").get_dict()
+        return meal_error_response_maker(
+            "삭제할 메뉴를 입력해주세요.", restaurant.name
+        ).get_dict()
 
     contexts: List[Context] = deepcopy(payload.contexts)
     menu_list = extract_menu(contexts, f"{meal_type}_menu", restaurant.name)
-    logger.debug(
-        "메뉴 삭제 시도: user_id=%s, meal_type=%s, menu=%s, menu_list=%s",
+    logger.info(
+        "메뉴 삭제 실행 시도: user_id=%s, restaurant_id=%s, "
+        "restaurant_name=%s, meal_type=%s, target_menu=%s, current_menu_count=%d, "
+        "current_menu=%s",
         payload.user_id,
+        restaurant.id,
+        restaurant.name,
         meal_type,
         menu,
+        len(menu_list),
         menu_list,
     )
     if menu not in menu_list:
@@ -499,7 +625,9 @@ async def meal_menu_delete(
             menu,
             menu_list,
         )
-        return meal_error_response_maker("등록되지 않은 메뉴입니다.").get_dict()
+        return meal_error_response_maker(
+            "등록되지 않은 메뉴입니다.", restaurant.name
+        ).get_dict()
 
     menu_list.remove(menu)
     contexts = save_menu(
@@ -508,11 +636,17 @@ async def meal_menu_delete(
         restaurant.name,
         menu_list,
     )
-    logger.debug(
-        "메뉴 삭제 완료: user_id=%s, meal_type=%s, menu=%s",
+    logger.info(
+        "메뉴 삭제 context 저장 완료: user_id=%s, restaurant_id=%s, "
+        "restaurant_name=%s, meal_type=%s, remaining_menu_count=%d, "
+        "remaining_menu=%s, contexts=%s",
         payload.user_id,
+        restaurant.id,
+        restaurant.name,
         meal_type,
+        len(menu_list),
         menu_list,
+        summarize_menu_contexts(contexts),
     )
 
     lunch_menu = extract_menu(contexts, "lunch_menu", restaurant.name)
@@ -530,7 +664,7 @@ async def meal_menu_delete(
     )
     lunch, dinner = make_meal_cards(lunch_card, dinner_card)
 
-    response = meal_response_maker(lunch, dinner)
+    response = meal_response_maker(lunch, dinner, restaurant_name=restaurant.name)
     response.contexts = contexts
 
     logger.info(
@@ -603,7 +737,13 @@ async def meal_register(
             - menu(sys.plugin.text): 등록할 메뉴
     """
     logger.info(
-        "식단 등록 요청 수신: user_id=%s, meal_type=%s", payload.user_id, meal_type
+        "식단 등록 요청 수신: user_id=%s, restaurant_id=%s, "
+        "restaurant_name=%s, meal_type=%s, contexts_before=%s",
+        payload.user_id,
+        restaurant.id,
+        restaurant.name,
+        meal_type,
+        summarize_menu_contexts(payload.contexts),
     )
 
     menu_text = extract_text_value(
@@ -633,10 +773,14 @@ async def meal_register(
 
     menu_list = split_string(menu_text)
 
-    logger.debug(
-        "식단 등록 메뉴 리스트 생성: user_id=%s, meal_type=%s, menu_list=%s",
+    logger.info(
+        "식단 등록 메뉴 파싱 완료: user_id=%s, restaurant_id=%s, "
+        "restaurant_name=%s, meal_type=%s, menu_count=%d, menu=%s",
         payload.user_id,
+        restaurant.id,
+        restaurant.name,
         meal_type,
+        len(menu_list),
         menu_list,
     )
     contexts: List[Context] = deepcopy(payload.contexts)
@@ -663,16 +807,32 @@ async def meal_register(
             meal_type,
             menu_list,
         )
-        return meal_error_response_maker("식사 종류를 확인해주세요.").get_dict()
-    logger.debug(
-        "식단 등록 완료: user_id=%s, meal_type=%s, menu_list=%s",
+        return meal_error_response_maker(
+            "식사 종류를 확인해주세요.", restaurant.name
+        ).get_dict()
+    logger.info(
+        "식단 등록 context 저장 후 미리보기 생성: user_id=%s, restaurant_id=%s, "
+        "restaurant_name=%s, meal_type=%s, added_menu_count=%d, added_menu=%s, "
+        "contexts_after=%s",
         payload.user_id,
+        restaurant.id,
+        restaurant.name,
         meal_type,
+        len(menu_list),
         menu_list,
+        summarize_menu_contexts(contexts),
     )
     # 등록된 식단 정보를 다시 불러와 카드를 생성
-    lunch_menu = extract_menu(contexts, "lunch_menu", restaurant.name)
-    dinner_menu = extract_menu(contexts, "dinner_menu", restaurant.name)
+    lunch_menu = (
+        extract_menu(contexts, "lunch_menu", restaurant.name)
+        if has_menu_context(contexts, "lunch_menu", restaurant.name)
+        else []
+    )
+    dinner_menu = (
+        extract_menu(contexts, "dinner_menu", restaurant.name)
+        if has_menu_context(contexts, "dinner_menu", restaurant.name)
+        else []
+    )
 
     lunch_meal = MealCard(
         menu=lunch_menu,
@@ -685,10 +845,19 @@ async def meal_register(
         restaurant_name=restaurant.name,
     )
     lunch, dinner = make_meal_cards(lunch_meal, dinner_meal)
-    response = meal_response_maker(lunch, dinner)
+    response = meal_response_maker(lunch, dinner, restaurant_name=restaurant.name)
     response.contexts = contexts
 
-    logger.info("식단 등록 완료: user_id=%s, meal_type=%s", payload.user_id, meal_type)
+    logger.info(
+        "식단 등록 응답 반환: user_id=%s, restaurant_id=%s, "
+        "restaurant_name=%s, meal_type=%s, lunch_count=%d, dinner_count=%d",
+        payload.user_id,
+        restaurant.id,
+        restaurant.name,
+        meal_type,
+        len(lunch_menu),
+        len(dinner_menu),
+    )
     for ctx in contexts:
         menu_list_param = ctx.params.get("menu_list")
         logger.debug(
@@ -708,7 +877,7 @@ async def meal_register(
         },
     ),
 )
-async def meal_submit(
+async def meal_submit(  # noqa: C901
     payload: Annotated[Payload, Depends(parse_payload)],
     user: Annotated[User, Depends(get_current_user)],
     client: Annotated[XUserIDClient, Depends(get_xuser_client_by_payload)],
@@ -734,20 +903,55 @@ async def meal_submit(
         str: 확정된 식단 정보를 반환합니다.
     """
     # 요청을 받아 Payload 객체로 변환 및 사용자의 ID로 등록된 식당 객체를 불러옴
-    logger.info("식단 확정 요청 수신: user_id=%s", payload.user_id)
+    logger.info(
+        "식단 확정 요청 수신: user_id=%s, restaurant_id=%s, "
+        "restaurant_name=%s, contexts_before=%s",
+        payload.user_id,
+        restaurant.id,
+        restaurant.name,
+        summarize_menu_contexts(payload.contexts),
+    )
 
     contexts: List[Context] = deepcopy(payload.contexts)
-    lunch_menu = extract_menu(contexts, "lunch_menu", restaurant.name)
-    dinner_menu = extract_menu(contexts, "dinner_menu", restaurant.name)
-
     menus_to_submit: list[tuple[MealType, str, list[str]]] = []
     if has_menu_context(contexts, "lunch_menu", restaurant.name):
-        menus_to_submit.append((MealType.lunch, "lunch_menu", lunch_menu))
+        lunch_menu = extract_menu(contexts, "lunch_menu", restaurant.name)
+        if lunch_menu:
+            menus_to_submit.append((MealType.lunch, "lunch_menu", lunch_menu))
     if has_menu_context(contexts, "dinner_menu", restaurant.name):
-        menus_to_submit.append((MealType.dinner, "dinner_menu", dinner_menu))
+        dinner_menu = extract_menu(contexts, "dinner_menu", restaurant.name)
+        if dinner_menu:
+            menus_to_submit.append((MealType.dinner, "dinner_menu", dinner_menu))
 
     if not menus_to_submit:
-        return meal_error_response_maker("등록할 메뉴가 없습니다.").get_dict()
+        logger.info(
+            "식단 확정 중단: 제출할 메뉴 없음, user_id=%s, restaurant_id=%s, "
+            "restaurant_name=%s, contexts=%s",
+            payload.user_id,
+            restaurant.id,
+            restaurant.name,
+            summarize_menu_contexts(contexts),
+        )
+        return meal_error_response_maker(
+            "등록할 메뉴가 없습니다.", restaurant.name
+        ).get_dict()
+
+    logger.info(
+        "식단 확정 제출 대상 생성: user_id=%s, restaurant_id=%s, "
+        "restaurant_name=%s, submit_targets=%s",
+        payload.user_id,
+        restaurant.id,
+        restaurant.name,
+        [
+            {
+                "meal_type": meal_type.value,
+                "context": context_name,
+                "menu_count": len(menu),
+                "menu": menu,
+            }
+            for meal_type, context_name, menu in menus_to_submit
+        ],
+    )
 
     # 식당 정보를 확정 등록
     results = await asyncio.gather(
@@ -756,6 +960,14 @@ async def meal_submit(
             for meal_type, _, menu in menus_to_submit
         ),
         return_exceptions=True,
+    )
+    logger.info(
+        "식단 확정 upstream 응답 수신: user_id=%s, restaurant_id=%s, "
+        "restaurant_name=%s, results=%s",
+        payload.user_id,
+        restaurant.id,
+        restaurant.name,
+        [repr(result) for result in results],
     )
 
     # 예외 여부 확인 및 메시지 작성
@@ -787,8 +999,16 @@ async def meal_submit(
 
     # 확정된 식당 정보를 다시 불러와 카드를 생성
     latest_meals: list[MealResponse] = await fetch_latest_meals(client, restaurant.id)
-    lunch = [meal for meal in latest_meals if meal.meal_type == MealType.lunch][0]
-    dinner = [meal for meal in latest_meals if meal.meal_type == MealType.dinner][0]
+    logger.info(
+        "식단 확정 후 최신 식단 조회 완료: user_id=%s, restaurant_id=%s, "
+        "restaurant_name=%s, latest_meal_count=%d",
+        payload.user_id,
+        restaurant.id,
+        restaurant.name,
+        len(latest_meals),
+    )
+    lunch = [meal for meal in latest_meals if meal.meal_type == MealType.lunch]
+    dinner = [meal for meal in latest_meals if meal.meal_type == MealType.dinner]
     lunch_carousel, dinner_carousel = make_meal_cards(lunch, dinner)
 
     # 응답 생성
@@ -810,8 +1030,11 @@ async def meal_submit(
         )
     response.contexts = contexts
     logger.info(
-        "식단 확정 완료: user_id=%s, restaurant_name=%s",
+        "식단 확정 완료: user_id=%s, restaurant_id=%s, restaurant_name=%s, "
+        "cleared_contexts=%s",
         payload.user_id,
+        restaurant.id,
         restaurant.name,
+        summarize_menu_contexts(contexts),
     )
     return response.get_dict()
