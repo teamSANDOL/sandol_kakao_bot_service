@@ -76,6 +76,10 @@ class Config:
     KC_CLIENT_ID = os.getenv("KC_CLIENT_ID", "sandol-kakao-bot")
     KC_REALM = os.getenv("KC_REALM", "Sandori")
     KC_CLIENT_SECRET = os.getenv("KC_CLIENT_SECRET")
+    KC_ADMIN_ROLE = os.getenv("KC_ADMIN_ROLE", "global_admin")
+
+    ADMIN_PANEL_ENABLED = os.getenv("ADMIN_PANEL_ENABLED", "true").lower() == "true"
+    ADMIN_SESSION_TTL_SECONDS = int(os.getenv("ADMIN_SESSION_TTL_SECONDS", "3600"))
 
     TIMEZONE = os.getenv("TIMEZONE", "Asia/Seoul")
     TZ = timezone(TIMEZONE)

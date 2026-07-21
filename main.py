@@ -5,15 +5,24 @@ import traceback
 from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Request, status, Depends  # noqa: F401 # pylint: disable=W0611
-from fastapi.responses import JSONResponse  # noqa: F401
+from fastapi.responses import JSONResponse, RedirectResponse  # noqa: F401
 from fastapi.routing import APIRoute
 from kakao_chatbot import Payload
 from kakao_chatbot.response import KakaoResponse
 from kakao_chatbot.response.components import SimpleTextComponent
+from keycloak.exceptions import KeycloakError
 from sqladmin import Admin
 import uvicorn
 
+from app.admin_auth import (
+    KeycloakAdminAuth,
+    admin_oauth_redirect_uri,
+    issue_admin_session_cookie,
+    validate_admin_access_token,
+    verify_state_cookie,
+)
 from app.models.admin import UserAdmin
+from app.services.auth_service import get_keycloak_client
 from app.routers import (
     meal_router,
     user_router,
@@ -63,8 +72,70 @@ app.include_router(statics_router)
 app.include_router(notice_router)
 app.include_router(classroom_router)
 
-admin = Admin(app=app, engine=async_engine)
-admin.add_view(UserAdmin)
+# Admin 패널은 Keycloak OIDC 인증(KC_ADMIN_ROLE 롤 필수)이 가능할 때만 마운트한다.
+# 인증을 구성할 수 없으면 마운트하지 않아 외부에 노출되지 않는다 (fail-closed).
+if Config.ADMIN_PANEL_ENABLED and Config.KC_CLIENT_SECRET:
+    admin = Admin(
+        app=app,
+        engine=async_engine,
+        authentication_backend=KeycloakAdminAuth(),
+    )
+    admin.add_view(UserAdmin)
+else:
+    logger.warning(
+        "Admin panel is NOT mounted (%s)",
+        "ADMIN_PANEL_ENABLED=false"
+        if not Config.ADMIN_PANEL_ENABLED
+        else "KC_CLIENT_SECRET is not configured",
+    )
+
+
+@app.get("/admin-oauth/callback", tags=["internal"], include_in_schema=False)
+async def admin_oauth_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+):
+    """Keycloak 로그인 후 admin 세션 쿠키를 발급하는 OIDC 콜백 엔드포인트입니다."""
+    if not (Config.ADMIN_PANEL_ENABLED and Config.KC_CLIENT_SECRET):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+    if error:
+        logger.warning("Admin OAuth callback returned error: %s", error)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="admin_login_failed"
+        )
+    if not code or not verify_state_cookie(request, state):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid_oauth_state"
+        )
+
+    try:
+        token_data = get_keycloak_client().token(
+            grant_type="authorization_code",
+            code=code,
+            redirect_uri=admin_oauth_redirect_uri(),
+        )
+    except KeycloakError as exc:
+        logger.warning("Admin OAuth code exchange failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="admin_token_exchange_failed",
+        ) from exc
+
+    try:
+        keycloak_sub = validate_admin_access_token(str(token_data["access_token"]))
+    except PermissionError as exc:
+        logger.warning("Admin login rejected: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="admin_role_required"
+        ) from exc
+
+    logger.info("Admin login succeeded for keycloak_sub=%s", keycloak_sub)
+    response = RedirectResponse(f"{Config.BASE_URL}/admin", status_code=302)
+    issue_admin_session_cookie(response, keycloak_sub)
+    return response
 
 
 def is_internal_route(request: Request) -> bool:
