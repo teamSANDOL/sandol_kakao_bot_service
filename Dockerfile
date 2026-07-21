@@ -16,4 +16,4 @@ EXPOSE 80
 
 # Command to run the FastAPI application
 ENTRYPOINT ["sh", "-c"]
-CMD ["alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 80"]
+CMD ["alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 80 --proxy-headers --forwarded-allow-ips '*'"]

@@ -6,6 +6,7 @@ import pytest
 
 
 os.environ.setdefault("DEBUG", "true")
+os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./_test_kakao_bot.db")
 os.environ.setdefault(
     "TOKEN_ENCRYPTION_KEY",
     "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
