@@ -18,6 +18,7 @@ from app.admin_auth import (
     KeycloakAdminAuth,
     admin_oauth_redirect_uri,
     issue_admin_session_cookie,
+    read_code_verifier,
     validate_admin_access_token,
     verify_state_cookie,
 )
@@ -111,11 +112,18 @@ async def admin_oauth_callback(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid_oauth_state"
         )
 
+    code_verifier = read_code_verifier(request)
+    if not code_verifier:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="missing_code_verifier"
+        )
+
     try:
         token_data = get_keycloak_client().token(
             grant_type="authorization_code",
             code=code,
             redirect_uri=admin_oauth_redirect_uri(),
+            code_verifier=code_verifier,
         )
     except KeycloakError as exc:
         logger.warning("Admin OAuth code exchange failed: %s", exc)

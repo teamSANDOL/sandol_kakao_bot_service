@@ -1,5 +1,7 @@
 """Admin 패널 Keycloak 인증 백엔드 테스트."""
 
+import base64
+import hashlib
 import json
 import time
 
@@ -15,6 +17,7 @@ from app.admin_auth import (
     build_admin_login_redirect,
     issue_admin_session_cookie,
     read_admin_session,
+    read_code_verifier,
     validate_admin_access_token,
     verify_state_cookie,
 )
@@ -125,6 +128,32 @@ class TestStateCookie:
     def test_missing_state_rejected(self):
         request = _make_request()
         assert verify_state_cookie(request, "anything") is False
+
+    def test_login_redirect_includes_pkce_challenge(self):
+        response = build_admin_login_redirect()
+        location = response.headers["location"]
+        assert "code_challenge_method=S256" in location
+
+        code_challenge = location.split("code_challenge=", 1)[1].split("&", 1)[0]
+
+        state_cookie = _extract_cookie(response, ADMIN_STATE_COOKIE)
+        request = _make_request({ADMIN_STATE_COOKIE: state_cookie})
+        code_verifier = read_code_verifier(request)
+        assert code_verifier is not None
+
+        # 콜백에서 쓸 code_verifier가 로그인 요청에 실은 code_challenge와 대응해야 한다
+        expected_challenge = (
+            base64.urlsafe_b64encode(
+                hashlib.sha256(code_verifier.encode("ascii")).digest()
+            )
+            .decode("ascii")
+            .rstrip("=")
+        )
+        assert code_challenge == expected_challenge
+
+    def test_code_verifier_missing_without_cookie(self):
+        request = _make_request()
+        assert read_code_verifier(request) is None
 
 
 class TestKeycloakAdminAuth:

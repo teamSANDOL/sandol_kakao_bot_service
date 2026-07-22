@@ -5,6 +5,8 @@ KC_ADMIN_ROLE(realm role)을 보유한 계정만 접근할 수 있다.
 세션은 Fernet으로 암호화된 쿠키로 관리한다.
 """
 
+import base64
+import hashlib
 import hmac
 import json
 import secrets
@@ -31,12 +33,23 @@ def admin_oauth_redirect_uri() -> str:
     return f"{Config.BASE_URL}/admin-oauth/callback"
 
 
+def _generate_pkce_pair() -> tuple[str, str]:
+    """RFC 7636 PKCE code_verifier/code_challenge(S256) 쌍을 생성합니다."""
+    code_verifier = secrets.token_urlsafe(64)
+    digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
+    code_challenge = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+    return code_verifier, code_challenge
+
+
 def build_admin_login_redirect() -> Response:
     """Keycloak 로그인 페이지로 리다이렉트하는 응답을 생성합니다.
 
-    CSRF 방지를 위한 state 값은 암호화 쿠키에 저장해 콜백에서 검증한다.
+    CSRF 방지를 위한 state 값과 PKCE code_verifier를 암호화 쿠키에 저장해
+    콜백에서 검증/사용한다. sandol-kakao-bot 클라이언트는 PKCE(S256)를
+    요구하므로 code_challenge를 함께 보낸다.
     """
     state = secrets.token_urlsafe(32)
+    code_verifier, code_challenge = _generate_pkce_pair()
     # well-known 조회 없이 표준 엔드포인트 규칙으로 직접 조립한다
     # (익명 요청마다 Keycloak 왕복을 피하기 위함).
     auth_url = (
@@ -48,6 +61,8 @@ def build_admin_login_redirect() -> Response:
                 "scope": "openid",
                 "redirect_uri": admin_oauth_redirect_uri(),
                 "state": state,
+                "code_challenge": code_challenge,
+                "code_challenge_method": "S256",
             }
         )
     )
@@ -55,7 +70,13 @@ def build_admin_login_redirect() -> Response:
     response.set_cookie(
         ADMIN_STATE_COOKIE,
         encrypt_token(
-            json.dumps({"state": state, "exp": int(time.time()) + _STATE_TTL_SECONDS})
+            json.dumps(
+                {
+                    "state": state,
+                    "code_verifier": code_verifier,
+                    "exp": int(time.time()) + _STATE_TTL_SECONDS,
+                }
+            )
         ),
         max_age=_STATE_TTL_SECONDS,
         httponly=True,
@@ -66,18 +87,35 @@ def build_admin_login_redirect() -> Response:
     return response
 
 
-def verify_state_cookie(request: Request, state: str | None) -> bool:
-    """콜백으로 돌아온 state 값이 쿠키에 저장한 값과 일치하는지 검증합니다."""
+def read_oauth_state(request: Request) -> dict | None:
+    """state 쿠키를 복호화해 payload를 반환합니다. 없거나 만료되었으면 None."""
     raw = request.cookies.get(ADMIN_STATE_COOKIE)
-    if not raw or not state:
-        return False
+    if not raw:
+        return None
     try:
         data = json.loads(decrypt_token(raw))
     except (ValueError, RuntimeError):
-        return False
+        return None
     if int(data.get("exp", 0)) <= int(time.time()):
+        return None
+    return data
+
+
+def verify_state_cookie(request: Request, state: str | None) -> bool:
+    """콜백으로 돌아온 state 값이 쿠키에 저장한 값과 일치하는지 검증합니다."""
+    data = read_oauth_state(request)
+    if not data or not state:
         return False
     return hmac.compare_digest(str(data.get("state", "")), state)
+
+
+def read_code_verifier(request: Request) -> str | None:
+    """state 쿠키에 저장된 PKCE code_verifier를 반환합니다."""
+    data = read_oauth_state(request)
+    if not data:
+        return None
+    verifier = data.get("code_verifier")
+    return verifier if isinstance(verifier, str) and verifier else None
 
 
 def validate_admin_access_token(access_token: str) -> str:
