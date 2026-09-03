@@ -42,7 +42,7 @@ from app.utils.kakao import (
     extract_text_value,
 )
 from app.utils.meal import (
-    build_restaurant_buttons,
+    apply_restaurant_buttons,
     extract_menu,
     has_menu_context,
     make_meal_cards,
@@ -263,8 +263,7 @@ async def meal_restaurant(
             else "교외"
         )
         item_card.add_item(title="위치", description=location_description)
-    for button in build_restaurant_buttons(restaurant):
-        item_card.add_button(button)
+    apply_restaurant_buttons(item_card, restaurant)
     response = KakaoResponse().add_component(item_card)
 
     logger.info(

@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from httpx import Response
+from kakao_chatbot.response.components import ItemCardComponent
 import pytest
 
 from app.routers import meal as meal_router_module
@@ -11,9 +12,12 @@ from app.routers.meal import meal_router
 from app.schemas.meals import Location, RestaurantResponse
 from app.utils.http import get_async_client
 from app.utils.kakao import parse_payload
+from app.utils import meal as meal_utils
 from app.utils.meal import (
-    MAX_ITEM_CARD_BUTTONS,
+    HORIZONTAL_BUTTON_LAYOUT_LIMIT,
+    MAX_SINGLE_ITEM_CARD_BUTTONS,
     WEEKLY_MENU_URL,
+    apply_restaurant_buttons,
     build_restaurant_buttons,
 )
 
@@ -189,9 +193,82 @@ def test_weekly_menu_button_moves_up_without_map_link() -> None:
 def test_restaurant_buttons_never_exceed_card_limit() -> None:
     buttons = build_restaurant_buttons(_student_restaurant())
 
-    assert len(buttons) <= MAX_ITEM_CARD_BUTTONS
+    assert len(buttons) <= MAX_SINGLE_ITEM_CARD_BUTTONS
     assert [button.label for button in buttons] == [
         "메뉴 보기",
         "식당 위치 지도 보기",
         "주간 식단표 보기",
     ]
+
+
+def test_kakao_map_link_wins_over_naver() -> None:
+    restaurant = RestaurantResponse(
+        id=3,
+        name="TIP 가가식당",
+        establishment_type="student",
+        location=Location(
+            is_campus=True,
+            building="TIP",
+            map_links={"naver": "https://naver.me/x", "kakao": "https://kko.kakao.com/x"},
+        ),
+    )
+
+    buttons = build_restaurant_buttons(restaurant)
+
+    map_button = next(b for b in buttons if b.label == "식당 위치 지도 보기")
+    assert map_button.web_link_url == "https://kko.kakao.com/x"
+
+
+def test_restaurant_without_location_still_builds_menu_button() -> None:
+    restaurant = RestaurantResponse(
+        id=4,
+        name="미가식당",
+        establishment_type="fixed_menu_restaurant",
+        location=None,
+    )
+
+    buttons = build_restaurant_buttons(restaurant)
+
+    assert [button.label for button in buttons] == ["메뉴 보기"]
+
+
+def test_three_buttons_force_vertical_layout() -> None:
+    item_card = ItemCardComponent([])
+
+    apply_restaurant_buttons(item_card, _student_restaurant())
+
+    assert len(item_card.buttons) == MAX_SINGLE_ITEM_CARD_BUTTONS
+    assert item_card.button_layout == "vertical"
+    assert item_card.render()["buttonLayout"] == "vertical"
+
+
+def test_two_buttons_keep_default_layout() -> None:
+    item_card = ItemCardComponent([])
+
+    apply_restaurant_buttons(
+        item_card,
+        RestaurantResponse(
+            id=5,
+            name="미가식당",
+            establishment_type="fixed_menu_restaurant",
+            location=Location(
+                is_campus=False,
+                building="외부건물",
+                map_links={"naver": "https://naver.me/x"},
+            ),
+        ),
+    )
+
+    assert len(item_card.buttons) == HORIZONTAL_BUTTON_LAYOUT_LIMIT
+    assert item_card.button_layout is None
+    assert "buttonLayout" not in item_card.render()
+
+
+def test_buttons_are_truncated_at_single_card_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(meal_utils, "MAX_SINGLE_ITEM_CARD_BUTTONS", 2)
+
+    buttons = build_restaurant_buttons(_student_restaurant())
+
+    assert [button.label for button in buttons] == ["메뉴 보기", "식당 위치 지도 보기"]
