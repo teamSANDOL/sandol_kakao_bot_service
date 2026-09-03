@@ -37,15 +37,7 @@ MENU_CONTEXT_ERROR_MESSAGE = (
     "이 메시지가 계속해서 나온다면 운영진에게 연락해주세요."
 )
 
-# 학교 이북 주간 식단표. meal-service 크롤러가 엑셀을 긁어오는 원본과 같은 주소다.
-WEEKLY_MENU_URL = "https://ibook.tukorea.ac.kr/Viewer/menu02"
-
-# 단일형 ItemCard 의 버튼 개수 상한이다. 케로셀에 담은 ItemCard 는 2개가 상한이라
-# 이 값을 그대로 쓰면 안 된다. kakao-chatbot 0.4.3 의 ItemCardComponent 는 개수를
-# 검사하지 않으므로 여기서 막는다.
-MAX_SINGLE_ITEM_CARD_BUTTONS = 3
-
-# 가로 정렬로 담기는 버튼 개수다. 이보다 많으면 buttonLayout 을 vertical 로 넘겨야 한다.
+# 가로 정렬로 담기는 버튼 개수다. 이보다 많으면 buttonLayout을 vertical로 넘겨야 한다.
 HORIZONTAL_BUTTON_LAYOUT_LIMIT = 2
 
 # 주간 식단표가 존재하는 식당 유형이다. 이북 엑셀에 들어있는 학생식당만 해당한다.
@@ -239,8 +231,8 @@ def time_range_to_string(  # noqa: D417
 def build_restaurant_buttons(restaurant: RestaurantResponse) -> list[Button]:
     """식당 정보 카드에 붙일 버튼을 우선순위 순서대로 조립합니다.
 
-    단일형 ItemCard 기준으로 앞쪽부터 채우고 상한에서 잘라냅니다. 케로셀에 담는
-    카드는 상한이 2개라 이 함수를 그대로 쓰면 안 됩니다.
+    최대 3개(메뉴 보기, 지도, 주간 식단표)를 만듭니다. 단일형 ItemCard는 세로 정렬에서
+    3개까지 허용하지만 Carousel에 담는 카드는 2개가 상한이라 그대로 쓰면 안 됩니다.
 
     주간 식단표는 이북 엑셀에 실려 있는 학생식당에만 붙입니다. 사장님이 등록한
     식당에 붙이면 다른 식당의 표가 열려 오해를 부릅니다.
@@ -259,8 +251,8 @@ def build_restaurant_buttons(restaurant: RestaurantResponse) -> list[Button]:
         )
     ]
 
-    map_links = restaurant.location.map_links if restaurant.location else None
-    map_url = (map_links or {}).get("kakao") or (map_links or {}).get("naver")
+    map_links = (restaurant.location.map_links if restaurant.location else None) or {}
+    map_url = map_links.get("kakao") or map_links.get("naver")
     if map_url:
         buttons.append(
             Button(label="식당 위치 지도 보기", action="webLink", web_link_url=map_url)
@@ -271,19 +263,11 @@ def build_restaurant_buttons(restaurant: RestaurantResponse) -> list[Button]:
             Button(
                 label="주간 식단표 보기",
                 action="webLink",
-                web_link_url=WEEKLY_MENU_URL,
+                web_link_url=Config.WEEKLY_MENU_URL,
             )
         )
 
-    if len(buttons) > MAX_SINGLE_ITEM_CARD_BUTTONS:
-        logger.warning(
-            "식당 카드 버튼이 상한을 넘어 잘라냅니다: restaurant=%s, 조립=%d, 상한=%d",
-            restaurant.name,
-            len(buttons),
-            MAX_SINGLE_ITEM_CARD_BUTTONS,
-        )
-
-    return buttons[:MAX_SINGLE_ITEM_CARD_BUTTONS]
+    return buttons
 
 
 def apply_restaurant_buttons(
@@ -291,8 +275,8 @@ def apply_restaurant_buttons(
 ) -> None:
     """식당 정보 카드에 버튼과 정렬 방식을 함께 설정합니다.
 
-    카카오는 가로 정렬 ItemCard 에 버튼을 두 개까지만 허용합니다. 세 개를 붙일
-    때는 buttonLayout 을 vertical 로 넘겨야 잘리지 않습니다. 두 개 이하일 때는
+    카카오는 가로 정렬 ItemCard에 버튼을 두 개까지만 허용합니다. 세 개를 붙일
+    때는 buttonLayout을 vertical로 넘겨야 잘리지 않습니다. 두 개 이하일 때는
     지정하지 않아 기존 카드의 생김새를 그대로 둡니다.
 
     Args:

@@ -70,6 +70,11 @@ class Config:
         os.getenv("LOGIN_REDIRECT_AFTER")
     )
 
+    # 학교 이북 주간 식단표. meal-service 크롤러가 엑셀을 긁어오는 원본과 같은 주소다.
+    WEEKLY_MENU_URL = os.getenv(
+        "WEEKLY_MENU_URL", "https://ibook.tukorea.ac.kr/Viewer/menu02"
+    )
+
     KC_SERVER_URL = (
         os.getenv("KC_SERVER_URL", "https://sandol.sio2.kr/auth/").rstrip("/") + "/"
     )
