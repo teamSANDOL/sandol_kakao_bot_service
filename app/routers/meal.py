@@ -42,6 +42,7 @@ from app.utils.kakao import (
     extract_text_value,
 )
 from app.utils.meal import (
+    build_restaurant_buttons,
     extract_menu,
     has_menu_context,
     make_meal_cards,
@@ -262,15 +263,8 @@ async def meal_restaurant(
             else "교외"
         )
         item_card.add_item(title="위치", description=location_description)
-    item_card.add_button(
-        label="메뉴 보기", action="message", message_text=f"학식 {restaurant_name}"
-    )
-    map_links = getattr(restaurant.location, "map_links", {})
-    url = map_links.get("kakao") or map_links.get("naver") if map_links else None
-    if url:
-        item_card.add_button(
-            label="식당 위치 지도 보기", action="webLink", web_link_url=url
-        )
+    for button in build_restaurant_buttons(restaurant):
+        item_card.add_button(button)
     response = KakaoResponse().add_component(item_card)
 
     logger.info(

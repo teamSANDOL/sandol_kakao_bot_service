@@ -12,6 +12,7 @@ from kakao_chatbot import Payload
 from kakao_chatbot.context import Context, ContextParam
 from kakao_chatbot.response import KakaoResponse
 from kakao_chatbot.response.components import (
+    Button,
     CarouselComponent,
     TextCardComponent,
     SimpleTextComponent,
@@ -34,6 +35,15 @@ MENU_CONTEXT_ERROR_MESSAGE = (
     "어떤 종류의 메뉴를 등록하실지 선택해주세요! 만약, 올바르게 선택하신 뒤에도 "
     "이 메시지가 계속해서 나온다면 운영진에게 연락해주세요."
 )
+
+# 학교 이북 주간 식단표. meal-service 크롤러가 엑셀을 긁어오는 원본과 같은 주소다.
+WEEKLY_MENU_URL = "https://ibook.tukorea.ac.kr/Viewer/menu02"
+
+# 카카오 ItemCard 가 받는 버튼 개수 상한이다.
+MAX_ITEM_CARD_BUTTONS = 3
+
+# 주간 식단표가 존재하는 식당 유형이다. 이북 엑셀에 들어있는 학생식당만 해당한다.
+WEEKLY_MENU_ESTABLISHMENT_TYPE = "student"
 
 
 def make_meal_card(meal: MealCard) -> TextCardComponent:
@@ -218,6 +228,48 @@ def time_range_to_string(  # noqa: D417
             return f"{time_range.start} ~ {time_range.end}"
         return f"{time_range.start} ~ {time_range.end}"
     return ""
+
+
+def build_restaurant_buttons(restaurant: RestaurantResponse) -> list[Button]:
+    """식당 정보 카드에 붙일 버튼을 우선순위 순서대로 조립합니다.
+
+    ItemCard 는 버튼 개수에 상한이 있으므로 앞쪽부터 채우고 상한에서 잘라냅니다.
+    주간 식단표는 이북 엑셀에 실려 있는 학생식당에만 붙입니다. 사장님이 등록한
+    식당에 붙이면 다른 식당의 표가 열려 오해를 부릅니다.
+
+    Args:
+        restaurant (RestaurantResponse): 카드에 표시할 식당 정보
+
+    Returns:
+        list[Button]: 카드에 붙일 버튼 목록
+    """
+    buttons = [
+        Button(
+            label="메뉴 보기",
+            action="message",
+            message_text=f"학식 {restaurant.name}",
+        )
+    ]
+
+    map_links = getattr(restaurant.location, "map_links", None) or {}
+    map_url = map_links.get("kakao") or map_links.get("naver")
+    if map_url:
+        buttons.append(
+            Button(
+                label="식당 위치 지도 보기", action="webLink", web_link_url=map_url
+            )
+        )
+
+    if restaurant.establishment_type == WEEKLY_MENU_ESTABLISHMENT_TYPE:
+        buttons.append(
+            Button(
+                label="주간 식단표 보기",
+                action="webLink",
+                web_link_url=WEEKLY_MENU_URL,
+            )
+        )
+
+    return buttons[:MAX_ITEM_CARD_BUTTONS]
 
 
 def extract_menu(contexts, meal_type_name, restaurant_name) -> list[str]:
