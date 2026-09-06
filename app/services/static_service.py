@@ -1,4 +1,4 @@
-"""학교 조직 정보 및 셔틀버스 이미지 링크를 가져오는 서비스 모듈."""
+"""학교 조직 정보, 셔틀버스/주간 식단표 이미지 링크를 가져오는 서비스 모듈."""
 
 from typing import List, Optional, Union
 
@@ -87,4 +87,27 @@ async def fetch_shuttle_img_links(
     response.raise_for_status()
     response_json = response.json()
     logger.debug(f"Fetched shuttle image links: {response_json}")
+    return response_json.get("image_urls", [])
+
+
+async def fetch_weekly_menu_img_links(
+    client: AsyncClient,
+) -> List[str]:
+    """주간 식단표 이미지 링크 리스트를 가져오는 함수.
+
+    static-info가 학교 iBook(menu02)의 페이지 이미지를 그대로 내보냅니다.
+
+    Args:
+        client (AsyncClient): HTTP 클라이언트 인스턴스
+
+    Returns:
+        List[str]: 주간 식단표 이미지 링크 리스트
+    """
+    response = await client.get(
+        f"{Config.STATIC_INFO_SERVICE_URL}/meal/images",
+        headers={"Accept": "application/json"},
+    )
+    response.raise_for_status()
+    response_json = response.json()
+    logger.debug(f"Fetched weekly menu image links: {response_json}")
     return response_json.get("image_urls", [])

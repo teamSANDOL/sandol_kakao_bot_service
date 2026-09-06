@@ -1,6 +1,6 @@
+from kakao_chatbot.response import ActionEnum
 from kakao_chatbot.response.components import ItemCardComponent
 
-from app.config import Config
 from app.schemas.meals import Location, RestaurantResponse
 from app.utils.meal import apply_restaurant_buttons, build_restaurant_buttons
 
@@ -37,7 +37,8 @@ def test_student_restaurant_gets_all_three_buttons_in_order() -> None:
         "식당 위치 지도 보기",
         "주간 식단표 보기",
     ]
-    assert buttons[2].web_link_url == Config.WEEKLY_MENU_URL
+    assert buttons[2].action == ActionEnum.MESSAGE
+    assert buttons[2].message_text == "주간 식단표"
 
 
 def test_owner_restaurant_has_no_weekly_menu_button() -> None:

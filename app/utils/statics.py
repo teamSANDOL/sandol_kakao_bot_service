@@ -74,41 +74,48 @@ def make_org_group_list(
             )
 
     return (
-        target_list[0]
-        if len(target_group) <= 5
-        else CarouselComponent(*target_list)
-        )  # 5개 이하일 경우 ListCardComponent 반환, 그 외에는 CarouselComponent 반환
+        target_list[0] if len(target_group) <= 5 else CarouselComponent(*target_list)
+    )  # 5개 이하일 경우 ListCardComponent 반환, 그 외에는 CarouselComponent 반환
 
 
-def make_shuttle_info_components(image_urls: list[str]) -> list[ParentComponent]:
-    """셔틀버스 이미지 정보를 카카오 응답 컴포넌트로 변환합니다.
+def make_image_components(
+    image_urls: list[str],
+    label: str,
+    max_images: int = MAX_SIMPLE_IMAGE_COMPONENTS,
+) -> list[ParentComponent]:
+    """이미지 링크 목록을 카카오 응답 컴포넌트로 변환합니다.
 
     카카오 응답은 최대 3개의 ParentComponent만 포함할 수 있으므로, 이미지가
-    4개 이상인 경우 이미지 직접 표시 대신 링크 목록 카드 하나로 폴백합니다.
+    max_images 개를 넘으면 이미지 직접 표시 대신 링크 목록 카드 하나로 폴백합니다.
+
+    Args:
+        image_urls (list[str]): 이미지 링크 목록
+        label (str): 안내 문구에 쓰는 이름. 예: "셔틀버스", "주간 식단표"
+        max_images (int): 직접 표시할 이미지 상한. 뒤에 다른 컴포넌트를 붙일 때 줄입니다.
     """
     if not image_urls:
-        return [SimpleTextComponent("셔틀버스 정보가 없습니다.")]
+        return [SimpleTextComponent(f"{label} 정보가 없습니다.")]
 
-    if len(image_urls) <= MAX_SIMPLE_IMAGE_COMPONENTS:
+    if len(image_urls) <= max_images:
         return [
-            SimpleImageComponent(image_url, "셔틀버스 정보 사진")
+            SimpleImageComponent(image_url, f"{label} 정보 사진")
             for image_url in image_urls
         ]
 
-    return [make_shuttle_image_link_component(image_urls)]
+    return [make_image_link_component(image_urls, label)]
 
 
-def make_shuttle_image_link_component(
-    image_urls: list[str],
+def make_image_link_component(
+    image_urls: list[str], label: str
 ) -> ListCardComponent | CarouselComponent:
-    """셔틀버스 이미지 URL 목록을 리스트 카드 또는 캐러셀로 반환합니다."""
-    header = "셔틀버스 이미지 바로가기"
+    """이미지 URL 목록을 리스트 카드 또는 캐러셀로 반환합니다."""
+    header = f"{label} 이미지 바로가기"
 
     if len(image_urls) <= ListCardComponent(header="").max_items:
         list_card = ListCardComponent(header=header)
         for index, image_url in enumerate(image_urls, start=1):
             list_card.add_item(
-                title=f"셔틀버스 정보 {index}",
+                title=f"{label} 정보 {index}",
                 description="이미지 링크 열기",
                 link=Link(web=image_url),
             )
@@ -122,7 +129,7 @@ def make_shuttle_image_link_component(
             start=start + 1,
         ):
             list_card.add_item(
-                title=f"셔틀버스 정보 {index}",
+                title=f"{label} 정보 {index}",
                 description="이미지 링크 열기",
                 link=Link(web=image_url),
             )
@@ -173,8 +180,7 @@ def make_unit_item(unit: dict | OrganizationUnit) -> ItemCardComponent:
         item_card.add_item(
             title="전화번호", description=phone_number_format(unit.phone)
         )
-        item_card.add_button(
-            label="전화 걸기", action="phone", phone_number=unit.phone)
+        item_card.add_button(label="전화 걸기", action="phone", phone_number=unit.phone)
 
     if unit.url:
         item_card.add_item(title="홈페이지", description=unit.url)

@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from httpx import Response
+from httpx import ConnectError, Response
 import pytest
 
 from app.config import Config
@@ -147,7 +147,7 @@ def test_student_cafeteria_shows_weekly_menu_button(
     body = _serialized_response(response)
     assert response.status_code == 200
     assert "주간 식단표 보기" in body
-    assert Config.WEEKLY_MENU_URL in body
+    assert '"messageText": "주간 식단표"' in body
     assert '"buttonLayout": "vertical"' in body
 
 
@@ -175,5 +175,76 @@ def test_owner_restaurant_hides_weekly_menu_button(
     body = _serialized_response(response)
     assert response.status_code == 200
     assert "주간 식단표 보기" not in body
-    assert Config.WEEKLY_MENU_URL not in body
+    assert "주간 식단표" not in body
     assert "buttonLayout" not in body
+
+
+def test_weekly_menu_returns_simple_images(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_fetch_weekly_menu_img_links(*_: object) -> list[str]:
+        return ["https://img/tip.jpg", "https://img/e.jpg"]
+
+    monkeypatch.setattr(
+        meal_router_module,
+        "fetch_weekly_menu_img_links",
+        fake_fetch_weekly_menu_img_links,
+    )
+
+    response = client.post("/meal/weekly_menu", json={})
+
+    assert response.status_code == 200
+    outputs = response.json()["template"]["outputs"]
+    assert len(outputs) == 3
+    assert [output["simpleImage"]["imageUrl"] for output in outputs[:2]] == [
+        "https://img/tip.jpg",
+        "https://img/e.jpg",
+    ]
+    assert outputs[0]["simpleImage"]["altText"] == "주간 식단표 정보 사진"
+    link_button = outputs[2]["textCard"]["buttons"][0]
+    assert link_button["label"] == "웹사이트에서 확인하기"
+    assert link_button["webLinkUrl"] == Config.WEEKLY_MENU_URL
+
+
+def test_weekly_menu_falls_back_to_link_card_when_static_info_fails(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_fetch_weekly_menu_img_links(*_: object) -> list[str]:
+        raise ConnectError("static-info down")
+
+    monkeypatch.setattr(
+        meal_router_module,
+        "fetch_weekly_menu_img_links",
+        fake_fetch_weekly_menu_img_links,
+    )
+
+    response = client.post("/meal/weekly_menu", json={})
+
+    assert response.status_code == 200
+    outputs = response.json()["template"]["outputs"]
+    assert len(outputs) == 1
+    assert "불러오지 못했습니다" in outputs[0]["textCard"]["description"]
+    assert outputs[0]["textCard"]["buttons"][0]["webLinkUrl"] == Config.WEEKLY_MENU_URL
+
+
+def test_weekly_menu_without_images_returns_notice(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_fetch_weekly_menu_img_links(*_: object) -> list[str]:
+        return []
+
+    monkeypatch.setattr(
+        meal_router_module,
+        "fetch_weekly_menu_img_links",
+        fake_fetch_weekly_menu_img_links,
+    )
+
+    response = client.post("/meal/weekly_menu", json={})
+
+    assert response.status_code == 200
+    outputs = response.json()["template"]["outputs"]
+    assert len(outputs) == 1
+    assert "불러오지 못했습니다" in outputs[0]["textCard"]["description"]
