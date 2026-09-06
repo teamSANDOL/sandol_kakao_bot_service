@@ -1,5 +1,6 @@
 from kakao_chatbot.response import ActionEnum
 from kakao_chatbot.response.components import ItemCardComponent
+import pytest
 
 from app.config import BlockID
 from app.schemas.meals import Location, RestaurantResponse
@@ -106,3 +107,40 @@ def test_two_buttons_keep_default_layout() -> None:
     assert len(item_card.buttons) == 2
     assert item_card.button_layout is None
     assert "buttonLayout" not in item_card.render()
+
+
+# 카카오 ItemCard 규격: 단일형 버튼은 가로 정렬 최대 2개, 세로 정렬 최대 3개.
+# kakao-chatbot 0.4.3은 이 개수를 검사하지 않으므로 여기서 모든 입력 조합에 대해 지킨다.
+@pytest.mark.parametrize(
+    "establishment_type",
+    [
+        "student",
+        "fixed_menu_restaurant",
+        "fixed_korean_buffet",
+        "variable_korean_buffet",
+    ],
+)
+@pytest.mark.parametrize("with_map", [True, False])
+def test_item_card_button_limits_hold_for_every_restaurant_kind(
+    establishment_type: str, with_map: bool
+) -> None:
+    restaurant = RestaurantResponse(
+        id=9,
+        name="식당",
+        establishment_type=establishment_type,
+        location=Location(
+            is_campus=True,
+            building="TIP",
+            map_links={"kakao": "https://kko.kakao.com/x"} if with_map else None,
+        ),
+    )
+    item_card = ItemCardComponent([])
+
+    apply_restaurant_buttons(item_card, restaurant)
+
+    rendered = item_card.render()
+    assert 1 <= len(rendered["buttons"]) <= 3
+    if len(rendered["buttons"]) > 2:
+        assert rendered["buttonLayout"] == "vertical"
+    else:
+        assert "buttonLayout" not in rendered
