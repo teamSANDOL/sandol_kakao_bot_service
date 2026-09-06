@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from httpx import ConnectError, Response
 import pytest
 
-from app.config import Config
+from app.config import BlockID, Config
 from app.routers import meal as meal_router_module
 from app.routers.meal import meal_router
 from app.schemas.meals import Location, RestaurantResponse
@@ -147,7 +147,7 @@ def test_student_cafeteria_shows_weekly_menu_button(
     body = _serialized_response(response)
     assert response.status_code == 200
     assert "주간 식단표 보기" in body
-    assert '"messageText": "주간 식단표"' in body
+    assert BlockID.WEEKLY_MENU.value in body
     assert '"buttonLayout": "vertical"' in body
 
 
@@ -175,7 +175,7 @@ def test_owner_restaurant_hides_weekly_menu_button(
     body = _serialized_response(response)
     assert response.status_code == 200
     assert "주간 식단표 보기" not in body
-    assert "주간 식단표" not in body
+    assert BlockID.WEEKLY_MENU.value not in body
     assert "buttonLayout" not in body
 
 

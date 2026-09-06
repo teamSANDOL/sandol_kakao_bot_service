@@ -45,9 +45,6 @@ HORIZONTAL_BUTTON_LAYOUT_LIMIT = 2
 # 주간 식단표가 존재하는 식당 유형이다. 이북 엑셀에 들어있는 학생식당만 해당한다.
 WEEKLY_MENU_ESTABLISHMENT_TYPE = "student"
 
-# 주간 식단표 블록을 여는 발화. OpenBuilder의 블록 발화와 /meal/weekly_menu 스킬에 맞춘다.
-WEEKLY_MENU_MESSAGE_TEXT = "주간 식단표"
-
 
 def make_meal_card(meal: MealCard) -> TextCardComponent:
     """식당의 식단 정보를 TextCard 형식으로 반환합니다.
@@ -240,8 +237,8 @@ def build_restaurant_buttons(restaurant: RestaurantResponse) -> list[Button]:
     3개까지 허용하지만 Carousel에 담는 카드는 2개가 상한이라 그대로 쓰면 안 됩니다.
 
     주간 식단표는 이북 엑셀에 실려 있는 학생식당에만 붙입니다. 사장님이 등록한
-    식당에 붙이면 다른 식당의 표가 열려 오해를 부릅니다. 버튼은 "주간 식단표"
-    발화를 보내고 /meal/weekly_menu 스킬이 이미지를 그려 줍니다.
+    식당에 붙이면 다른 식당의 표가 열려 오해를 부릅니다. 버튼은 주간 식단표 블록
+    (BlockID.WEEKLY_MENU)으로 이동하고 /meal/weekly_menu 스킬이 이미지를 그려 줍니다.
 
     Args:
         restaurant (RestaurantResponse): 카드에 표시할 식당 정보
@@ -268,8 +265,8 @@ def build_restaurant_buttons(restaurant: RestaurantResponse) -> list[Button]:
         buttons.append(
             Button(
                 label="주간 식단표 보기",
-                action="message",
-                message_text=WEEKLY_MENU_MESSAGE_TEXT,
+                action="block",
+                block_id=BlockID.WEEKLY_MENU,
             )
         )
 
