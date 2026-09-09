@@ -24,7 +24,7 @@ from app.utils.kakao import parse_payload, extract_text_value
 from app.utils.openapi import create_openapi_extra
 from app.utils.statics import (
     make_org_group_list,
-    make_shuttle_info_components,
+    make_image_components,
     make_unit_item,
 )
 
@@ -148,5 +148,5 @@ async def shuttle_info(
     shuttle_images.reverse()
 
     return KakaoResponse(
-        component_list=make_shuttle_info_components(shuttle_images)
+        component_list=make_image_components(shuttle_images, "셔틀버스")
     ).get_dict()

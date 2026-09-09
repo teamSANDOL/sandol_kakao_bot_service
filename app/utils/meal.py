@@ -11,8 +11,11 @@ from fastapi.responses import JSONResponse
 from kakao_chatbot import Payload
 from kakao_chatbot.context import Context, ContextParam
 from kakao_chatbot.response import KakaoResponse
+from kakao_chatbot.response.base import ParentComponent
 from kakao_chatbot.response.components import (
+    Button,
     CarouselComponent,
+    ItemCardComponent,
     TextCardComponent,
     SimpleTextComponent,
 )
@@ -27,6 +30,7 @@ from app.services.user_service import get_current_user, get_xuser_client_by_payl
 from app.utils import get_korean_day
 from app.utils.http import XUserIDClient
 from app.utils.kakao import KakaoError, extract_text_value, parse_payload
+from app.utils.statics import MAX_SIMPLE_IMAGE_COMPONENTS, make_image_components
 
 
 MENU_CONTEXT_ERROR_MESSAGE = (
@@ -34,6 +38,12 @@ MENU_CONTEXT_ERROR_MESSAGE = (
     "어떤 종류의 메뉴를 등록하실지 선택해주세요! 만약, 올바르게 선택하신 뒤에도 "
     "이 메시지가 계속해서 나온다면 운영진에게 연락해주세요."
 )
+
+# 가로 정렬로 담기는 버튼 개수다. 이보다 많으면 buttonLayout을 vertical로 넘겨야 한다.
+HORIZONTAL_BUTTON_LAYOUT_LIMIT = 2
+
+# 주간 식단표가 존재하는 식당 유형이다. 이북 엑셀에 들어있는 학생식당만 해당한다.
+WEEKLY_MENU_ESTABLISHMENT_TYPE = "student"
 
 
 def make_meal_card(meal: MealCard) -> TextCardComponent:
@@ -220,6 +230,107 @@ def time_range_to_string(  # noqa: D417
     return ""
 
 
+def build_restaurant_buttons(restaurant: RestaurantResponse) -> list[Button]:
+    """식당 정보 카드에 붙일 버튼을 우선순위 순서대로 조립합니다.
+
+    최대 3개(메뉴 보기, 지도, 주간 식단표)를 만듭니다. 단일형 ItemCard는 세로 정렬에서
+    3개까지 허용하지만 Carousel에 담는 카드는 2개가 상한이라 그대로 쓰면 안 됩니다.
+
+    주간 식단표는 이북 엑셀에 실려 있는 학생식당에만 붙입니다. 사장님이 등록한
+    식당에 붙이면 다른 식당의 표가 열려 오해를 부릅니다. 버튼은 주간 식단표 블록
+    (BlockID.WEEKLY_MENU)으로 이동하고 /meal/weekly_menu 스킬이 이미지를 그려 줍니다.
+
+    Args:
+        restaurant (RestaurantResponse): 카드에 표시할 식당 정보
+
+    Returns:
+        list[Button]: 카드에 붙일 버튼 목록
+    """
+    buttons = [
+        Button(
+            label="메뉴 보기",
+            action="message",
+            message_text=f"학식 {restaurant.name}",
+        )
+    ]
+
+    map_links = (restaurant.location.map_links if restaurant.location else None) or {}
+    map_url = map_links.get("kakao") or map_links.get("naver")
+    if map_url:
+        buttons.append(
+            Button(label="식당 위치 지도 보기", action="webLink", web_link_url=map_url)
+        )
+
+    if restaurant.establishment_type == WEEKLY_MENU_ESTABLISHMENT_TYPE:
+        buttons.append(
+            Button(
+                label="주간 식단표 보기",
+                action="block",
+                block_id=BlockID.WEEKLY_MENU,
+            )
+        )
+
+    return buttons
+
+
+def make_weekly_menu_components(image_urls: list[str]) -> list[ParentComponent]:
+    """주간 식단표 이미지와 웹사이트 링크 카드를 응답 컴포넌트로 조립합니다.
+
+    이미지가 있으면 이미지들 뒤에 링크 카드를 붙이고, 없으면(static-info 장애 등)
+    링크 카드만 보내 사용자가 웹사이트에서라도 볼 수 있게 합니다. QuickReply는
+    카카오 규격상 webLink를 지원하지 않아 TextCard 버튼으로 링크를 답니다.
+
+    Args:
+        image_urls (list[str]): static-info가 준 식단표 이미지 링크 목록
+
+    Returns:
+        list[ParentComponent]: 카카오 응답에 담을 컴포넌트 목록
+    """
+    link_card = TextCardComponent(
+        title="주간 식단표",
+        description=(
+            "웹사이트에서 전체 식단표를 확인할 수 있습니다."
+            if image_urls
+            else "식단표 이미지를 불러오지 못했습니다. 웹사이트에서 확인해주세요."
+        ),
+    )
+    link_card.add_button(
+        label="웹사이트에서 확인하기",
+        action="webLink",
+        web_link_url=Config.WEEKLY_MENU_URL,
+    )
+    if not image_urls:
+        return [link_card]
+
+    # 응답은 컴포넌트 3개까지라 링크 카드 자리 하나를 남긴다.
+    images = make_image_components(
+        image_urls, "주간 식단표", max_images=MAX_SIMPLE_IMAGE_COMPONENTS - 1
+    )
+    return [*images, link_card]
+
+
+def apply_restaurant_buttons(
+    item_card: ItemCardComponent, restaurant: RestaurantResponse
+) -> None:
+    """식당 정보 카드에 버튼과 정렬 방식을 함께 설정합니다.
+
+    카카오는 가로 정렬 ItemCard에 버튼을 두 개까지만 허용합니다. 세 개를 붙일
+    때는 buttonLayout을 vertical로 넘겨야 잘리지 않습니다. 두 개 이하일 때는
+    지정하지 않아 기존 카드의 생김새를 그대로 둡니다.
+
+    Args:
+        item_card (ItemCardComponent): 버튼을 붙일 카드
+        restaurant (RestaurantResponse): 카드에 표시할 식당 정보
+    """
+    buttons = build_restaurant_buttons(restaurant)
+
+    if len(buttons) > HORIZONTAL_BUTTON_LAYOUT_LIMIT:
+        item_card.button_layout = "vertical"
+
+    for button in buttons:
+        item_card.add_button(button)
+
+
 def extract_menu(contexts, meal_type_name, restaurant_name) -> list[str]:
     """컨텍스트에서 메뉴 리스트를 추출합니다.
 
@@ -349,9 +460,7 @@ def has_menu_context(
         return False
 
     has_context = bool(
-        context
-        and menu_list_param
-        and restaurant_name_param.value == restaurant_name
+        context and menu_list_param and restaurant_name_param.value == restaurant_name
     )
     if has_context:
         logger.info(

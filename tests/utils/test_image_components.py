@@ -1,13 +1,13 @@
 from kakao_chatbot.response import KakaoResponse
 
-from app.utils.statics import make_shuttle_info_components
+from app.utils.statics import make_image_components
 
 
-def test_make_shuttle_info_components_keeps_simple_images_up_to_three() -> None:
+def test_make_image_components_keeps_simple_images_up_to_three() -> None:
     image_urls = [f"https://example.com/shuttle-{index}.jpg" for index in range(3)]
 
     response = KakaoResponse(
-        component_list=make_shuttle_info_components(image_urls)
+        component_list=make_image_components(image_urls, "셔틀버스")
     ).get_dict()
 
     outputs = response["template"]["outputs"]
@@ -15,11 +15,11 @@ def test_make_shuttle_info_components_keeps_simple_images_up_to_three() -> None:
     assert all("simpleImage" in output for output in outputs)
 
 
-def test_make_shuttle_info_components_falls_back_to_list_card_for_four_images() -> None:
+def test_make_image_components_falls_back_to_list_card_for_four_images() -> None:
     image_urls = [f"https://example.com/shuttle-{index}.jpg" for index in range(4)]
 
     response = KakaoResponse(
-        component_list=make_shuttle_info_components(image_urls)
+        component_list=make_image_components(image_urls, "셔틀버스")
     ).get_dict()
 
     outputs = response["template"]["outputs"]
@@ -28,11 +28,11 @@ def test_make_shuttle_info_components_falls_back_to_list_card_for_four_images() 
     assert len(outputs[0]["listCard"]["items"]) == 4
 
 
-def test_make_shuttle_info_components_falls_back_to_carousel_for_many_images() -> None:
+def test_make_image_components_falls_back_to_carousel_for_many_images() -> None:
     image_urls = [f"https://example.com/shuttle-{index}.jpg" for index in range(6)]
 
     response = KakaoResponse(
-        component_list=make_shuttle_info_components(image_urls)
+        component_list=make_image_components(image_urls, "셔틀버스")
     ).get_dict()
 
     outputs = response["template"]["outputs"]

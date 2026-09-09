@@ -10,7 +10,7 @@ from typing import Annotated, List, Literal
 
 from fastapi import Depends, APIRouter
 
-from httpx import AsyncClient, HTTPStatusError
+from httpx import AsyncClient, HTTPError, HTTPStatusError
 from kakao_chatbot import Payload
 from kakao_chatbot.context import Context
 from kakao_chatbot.response import KakaoResponse, QuickReply, ActionEnum
@@ -33,6 +33,7 @@ from app.services.meal_service import (
     post_meal,
     post_restaurant_manager_application,
 )
+from app.services.static_service import fetch_weekly_menu_img_links
 from app.services.user_service import get_xuser_client_by_payload, get_current_user
 from app.utils.http import XUserIDClient, get_async_client
 from app.utils import create_openapi_extra
@@ -42,6 +43,7 @@ from app.utils.kakao import (
     extract_text_value,
 )
 from app.utils.meal import (
+    apply_restaurant_buttons,
     extract_menu,
     has_menu_context,
     make_meal_cards,
@@ -53,6 +55,7 @@ from app.utils.meal import (
     select_restaurant,
     split_string,
     time_range_to_string,
+    make_weekly_menu_components,
 )
 
 meal_router = APIRouter(prefix="/meal")
@@ -262,15 +265,7 @@ async def meal_restaurant(
             else "교외"
         )
         item_card.add_item(title="위치", description=location_description)
-    item_card.add_button(
-        label="메뉴 보기", action="message", message_text=f"학식 {restaurant_name}"
-    )
-    map_links = getattr(restaurant.location, "map_links", {})
-    url = map_links.get("kakao") or map_links.get("naver") if map_links else None
-    if url:
-        item_card.add_button(
-            label="식당 위치 지도 보기", action="webLink", web_link_url=url
-        )
+    apply_restaurant_buttons(item_card, restaurant)
     response = KakaoResponse().add_component(item_card)
 
     logger.info(
@@ -280,6 +275,54 @@ async def meal_restaurant(
     )
 
     return response.get_dict()
+
+
+@meal_router.post(
+    "/weekly_menu",
+    openapi_extra=create_openapi_extra(
+        utterance="주간 식단표",
+    ),
+)
+async def meal_weekly_menu(
+    payload: Annotated[Payload, Depends(parse_payload)],
+    client: Annotated[AsyncClient, Depends(get_async_client)],
+) -> dict[str, object]:
+    """학생식당 주간 식단표 이미지를 반환합니다.
+
+    static-info가 학교 iBook(menu02)에서 가져온 페이지 이미지를 그대로 보여주고,
+    아래에 웹사이트 링크 카드를 붙입니다. static-info 호출이 실패하거나 이미지가
+    없으면 링크 카드만 보냅니다(failover).
+
+    ## 카카오 챗봇 연결 정보
+    ---
+    - 동작방식: 발화 / 식당 정보 카드의 "주간 식단표 보기" 버튼(블록 이동)
+
+    - OpenBuilder:
+        - 블럭: "주간 식단표" (BlockID.WEEKLY_MENU)
+        - 스킬: "주간 식단표"
+    ---
+
+    Returns:
+        dict: 주간 식단표 이미지 응답
+    """
+    logger.info("주간 식단표 조회 요청 수신: kakao_id=%s", payload.user_id)
+    try:
+        image_urls = await fetch_weekly_menu_img_links(client)
+    except HTTPError:
+        logger.error(
+            "주간 식단표 이미지 조회 실패, 웹사이트 링크로 대체: kakao_id=%s",
+            payload.user_id,
+            exc_info=True,
+        )
+        image_urls = []
+    logger.info(
+        "주간 식단표 조회 완료: kakao_id=%s, image_count=%d",
+        payload.user_id,
+        len(image_urls),
+    )
+    return KakaoResponse(
+        component_list=make_weekly_menu_components(image_urls)
+    ).get_dict()
 
 
 @meal_router.post(
@@ -315,7 +358,9 @@ async def meal_manager_apply(
     if not restaurant_name:
         return (
             KakaoResponse()
-            .add_component(SimpleTextComponent("manager 신청할 식당 이름을 입력해주세요."))
+            .add_component(
+                SimpleTextComponent("manager 신청할 식당 이름을 입력해주세요.")
+            )
             .get_dict()
         )
 
@@ -338,7 +383,9 @@ async def meal_manager_apply(
         elif status_code == Config.HttpStatus.UNAUTHORIZED:
             message = "로그인 후 다시 시도해주세요."
         else:
-            message = "manager 신청 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
+            message = (
+                "manager 신청 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
+            )
         logger.warning(
             "Manager 신청 실패: kakao_id=%s, restaurant_id=%s, status=%s",
             payload.user_id,
