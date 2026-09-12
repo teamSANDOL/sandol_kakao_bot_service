@@ -1,11 +1,16 @@
 """식단/식당 조회 및 등록을 위한 외부 API 연동 서비스입니다."""
 
-from typing import Any, List, Literal, Optional
+from datetime import date, datetime
+from typing import Any, List, Optional
 
 from httpx import AsyncClient, HTTPStatusError
 
 from app.config import Config, logger
-from app.schemas.meals import MealType, MealResponse, RestaurantResponse
+from app.schemas.meals import (
+    MealResponse,
+    MealType,
+    RestaurantResponse,
+)
 from app.utils.http import XUserIDClient
 
 
@@ -54,10 +59,32 @@ async def fetch_latest_meals(
     return [MealResponse.model_validate(item) for item in list_data]
 
 
+async def fetch_meals_for_date(
+    client: AsyncClient,
+    served_date: date,
+    restaurant_id: Optional[int] = None,
+) -> List[MealResponse]:
+    """제공일이 정확히 일치하는 식단을 조회합니다."""
+    endpoint = f"{Config.MEAL_SERVICE_URL}/meals/latest"
+    response = await client.get(
+        endpoint,
+        params={
+            "date": served_date.isoformat(),
+            "size": 100,
+        },
+    )
+    response.raise_for_status()
+    list_data = response.json().get("data", [])
+    meals = [MealResponse.model_validate(item) for item in list_data]
+    if restaurant_id is None:
+        return meals
+    return [meal for meal in meals if meal.restaurant_id == restaurant_id]
+
+
 async def fetch_restaurants(
     client: AsyncClient,
     restaurant_id: Optional[int] = None,
-    establishment_type: Optional[Literal["student", "fixed_menu_restaurant", "fixed_korean_buffet", "variable_korean_buffet"]] = None,
+    establishment_type: str | None = None,
 ) -> List[RestaurantResponse]:
     """식당 정보를 가져오는 함수.
 
@@ -166,6 +193,8 @@ async def post_meal(
     Returns:
         dict: 등록된 식단 정보
     """
+    registration_date = datetime.now(Config.TZ).date()
+
     logger.info(
         "식단 upstream 등록 요청 준비: restaurant_id=%s, meal_type=%s, "
         "raw_menu_count=%d, raw_menu=%s",
@@ -188,6 +217,7 @@ async def post_meal(
     request_body = {
         "meal_type": meal_type,
         "menu": menu_items,
+        "date": registration_date.isoformat(),
     }
     logger.info(
         "식단 upstream 등록 요청 전송: restaurant_id=%s, meal_type=%s, "
