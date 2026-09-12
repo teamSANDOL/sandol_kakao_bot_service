@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta
 from types import SimpleNamespace
-from typing import Literal
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -53,6 +52,7 @@ def _meal_response(
         restaurant_name=restaurant_name,
         registered_at=registered_at,
         updated_at=registered_at,
+        served_date=registered_at.date(),
     )
 
 
@@ -60,7 +60,7 @@ def _restaurant_response(
     *,
     restaurant_id: int,
     name: str,
-    establishment_type: Literal["student", "fixed_menu_restaurant", "fixed_korean_buffet", "variable_korean_buffet"],
+    establishment_type: str,
 ) -> RestaurantResponse:
     return RestaurantResponse(
         id=restaurant_id,
@@ -77,7 +77,7 @@ def test_meal_view_orders_today_first_and_pushes_student_cafeterias_last(
     yesterday = now - timedelta(days=1)
     two_days_ago = now - timedelta(days=2)
 
-    async def fake_fetch_latest_meals(*_: object):
+    async def fake_fetch_meals_for_date(*_: object):
         return [
             _meal_response(
                 meal_id=1,
@@ -117,7 +117,8 @@ def test_meal_view_orders_today_first_and_pushes_student_cafeterias_last(
             ),
         ]
 
-    async def fake_fetch_restaurants(*_: object, **__: object):
+    async def fake_fetch_restaurants(*_: object, **kwargs: object):
+        assert kwargs["establishment_type"] == "student"
         return [
             _restaurant_response(
                 restaurant_id=1,
@@ -125,43 +126,22 @@ def test_meal_view_orders_today_first_and_pushes_student_cafeterias_last(
                 establishment_type="student",
             ),
             _restaurant_response(
-                restaurant_id=2,
-                name="외부식당B",
-                establishment_type="fixed_menu_restaurant",
-            ),
-            _restaurant_response(
-                restaurant_id=3,
-                name="일반식당A",
-                establishment_type="fixed_menu_restaurant",
-            ),
-            _restaurant_response(
                 restaurant_id=4,
                 name="TIP 가가식당",
                 establishment_type="student",
-            ),
-            _restaurant_response(
-                restaurant_id=5,
-                name="일반식당C",
-                establishment_type="fixed_korean_buffet",
-            ),
-            _restaurant_response(
-                restaurant_id=6,
-                name="외부식당D",
-                establishment_type="fixed_menu_restaurant",
             ),
         ]
 
     monkeypatch.setattr(
         meal_router_module,
-        "fetch_latest_meals",
-        fake_fetch_latest_meals,
+        "fetch_meals_for_date",
+        fake_fetch_meals_for_date,
     )
     monkeypatch.setattr(
         meal_router_module,
         "fetch_restaurants",
         fake_fetch_restaurants,
     )
-
     response = client.post("/meal/view", json={})
 
     assert response.status_code == 200
@@ -196,7 +176,7 @@ def test_meal_view_skips_student_restaurant_lookup_for_specific_restaurant(
             ),
         )
 
-    async def fake_fetch_latest_meals(*_: object):
+    async def fake_fetch_meals_for_date(*_: object):
         return [
             _meal_response(
                 meal_id=1,
@@ -212,6 +192,7 @@ def test_meal_view_skips_student_restaurant_lookup_for_specific_restaurant(
                 restaurant_name="TIP 가가식당",
                 registered_at=now.replace(hour=9),
                 updated_at=now.replace(hour=9),
+                served_date=now.date(),
             ),
         ]
 
@@ -221,8 +202,8 @@ def test_meal_view_skips_student_restaurant_lookup_for_specific_restaurant(
     client.app.dependency_overrides[parse_payload] = fake_parse_payload
     monkeypatch.setattr(
         meal_router_module,
-        "fetch_latest_meals",
-        fake_fetch_latest_meals,
+        "fetch_meals_for_date",
+        fake_fetch_meals_for_date,
     )
     monkeypatch.setattr(
         meal_router_module,
@@ -233,3 +214,55 @@ def test_meal_view_skips_student_restaurant_lookup_for_specific_restaurant(
     response = client.post("/meal/view", json={})
 
     assert response.status_code == 200
+
+
+def test_meal_view_displays_unknown_establishment_type_as_general_restaurant(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unknown future types are displayed and never classified as student cafeterias."""
+    now = datetime.now(tz=Config.TZ)
+
+    async def fake_fetch_meals_for_date(*_: object):
+        return [
+            _meal_response(
+                meal_id=1,
+                restaurant_id=1,
+                restaurant_name="새 유형 식당",
+                registered_at=now.replace(hour=10),
+            ),
+            _meal_response(
+                meal_id=2,
+                restaurant_id=2,
+                restaurant_name="학생식당",
+                registered_at=now.replace(hour=11),
+            ),
+        ]
+
+    async def fake_fetch_restaurants(*_: object, **kwargs: object):
+        assert kwargs["establishment_type"] == "student"
+        return [
+            _restaurant_response(
+                restaurant_id=2,
+                name="학생식당",
+                establishment_type="student",
+            )
+        ]
+
+    monkeypatch.setattr(
+        meal_router_module,
+        "fetch_meals_for_date",
+        fake_fetch_meals_for_date,
+    )
+    monkeypatch.setattr(
+        meal_router_module,
+        "fetch_restaurants",
+        fake_fetch_restaurants,
+    )
+
+    response = client.post("/meal/view", json={})
+
+    assert response.status_code == 200
+    body = str(response.json())
+    assert "새 유형 식당(점심)" in body
+    assert body.index("새 유형 식당(점심)") < body.index("학생식당(점심)")
