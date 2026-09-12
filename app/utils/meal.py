@@ -51,10 +51,12 @@ def make_meal_card(meal: MealCard) -> TextCardComponent:
     # 카드 제목 예: "산돌식당(점심)"
     title = f"{meal.restaurant_name}({mealtype_dict[meal.meal_type]})"
     r_t: datetime = meal.updated_at
+    served_date = meal.date or normalize_meal_datetime(meal.updated_at).date()
     formatted_time = r_t.strftime(
         (
-            f"\n{r_t.month}월 {r_t.day}일 {get_korean_day(r_t.weekday())}요일 "
-            f"{r_t.hour}시 업데이트"
+            f"\n\n제공일: {served_date.month}월 {served_date.day}일 "
+            f"{get_korean_day(served_date.weekday())}요일"
+            f"\n{r_t.month}월 {r_t.day}일 {r_t.hour}시 업데이트"
         )
     )
 
@@ -136,8 +138,9 @@ def sort_meals_for_display(
     older_meals: list[MealResponse] = []
 
     for meal in meals:
+        meal_date = meal.date
         registered_at = normalize_meal_datetime(meal.registered_at)
-        if registered_at.date() == today:
+        if meal_date == today or (meal_date is None and registered_at.date() == today):
             today_meals.append(meal)
         else:
             older_meals.append(meal)
@@ -149,7 +152,10 @@ def sort_meals_for_display(
         )
     )
     older_meals.sort(
-        key=lambda meal: normalize_meal_datetime(meal.registered_at),
+        key=lambda meal: (
+            meal.date or normalize_meal_datetime(meal.registered_at).date(),
+            normalize_meal_datetime(meal.registered_at),
+        ),
         reverse=True,
     )
 
@@ -349,9 +355,7 @@ def has_menu_context(
         return False
 
     has_context = bool(
-        context
-        and menu_list_param
-        and restaurant_name_param.value == restaurant_name
+        context and menu_list_param and restaurant_name_param.value == restaurant_name
     )
     if has_context:
         logger.info(
@@ -476,27 +480,6 @@ def save_menu(  # noqa: PLR0913
         )
         raise KakaoError(MENU_CONTEXT_ERROR_MESSAGE)
     return contexts
-
-
-# 식당 유형을 문자열로 변환하기 위한 딕셔너리 (전역 변수로 정의)
-ESTABLISHMENT_TYPE_DICT = {
-    "student": "학생식당",
-    "fixed_menu_restaurant": "고정메뉴 일반식당",
-    "fixed_korean_buffet": "고정메뉴형 한식뷔페",
-    "variable_korean_buffet": "메뉴 변경형 한식뷔페",
-}
-
-
-def establishment_type_to_string(establishment_type: str) -> str:
-    """식당의 유형을 문자열로 변환합니다.
-
-    Args:
-        establishment_type (str): 식당의 유형
-
-    Returns:
-        str: 변환된 문자열
-    """
-    return ESTABLISHMENT_TYPE_DICT.get(establishment_type, establishment_type)
 
 
 def meal_response_maker(
