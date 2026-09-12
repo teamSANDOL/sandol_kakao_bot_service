@@ -10,7 +10,9 @@ class FakeClient:
         self.request_url: str | None = None
         self.request_params: dict[str, str | int] | None = None
 
-    async def get(self, url: str, params: dict[str, str | int] | None = None) -> SimpleNamespace:
+    async def get(
+        self, url: str, params: dict[str, str | int] | None = None
+    ) -> SimpleNamespace:
         self.request_url = url
         self.request_params = params
 
@@ -52,3 +54,35 @@ async def test_fetch_restaurants_uses_trailing_slash_for_collection_endpoint() -
         "size": 100,
         "establishment_type": "student",
     }
+
+
+@pytest.mark.asyncio
+async def test_fetch_restaurants_accepts_unknown_establishment_type() -> None:
+    class UnknownTypeClient(FakeClient):
+        async def get(
+            self,
+            url: str,
+            params: dict[str, str | int] | None = None,
+        ) -> SimpleNamespace:
+            self.request_url = url
+            self.request_params = params
+
+            def raise_for_status() -> None:
+                return None
+
+            def json() -> dict[str, list[dict[str, object]]]:
+                return {
+                    "data": [
+                        {
+                            "id": 1,
+                            "name": "새 유형 식당",
+                            "establishment_type": "future_cafeteria",
+                        }
+                    ]
+                }
+
+            return SimpleNamespace(raise_for_status=raise_for_status, json=json)
+
+    restaurants = await fetch_restaurants(UnknownTypeClient())
+
+    assert restaurants[0].establishment_type == "future_cafeteria"

@@ -6,6 +6,7 @@
 
 import asyncio
 from copy import deepcopy
+from datetime import datetime
 from typing import Annotated, List, Literal
 
 from fastapi import Depends, APIRouter
@@ -27,6 +28,7 @@ from app.schemas.meals import (
 )
 from app.models.users import User
 from app.services.meal_service import (
+    fetch_meals_for_date,
     fetch_latest_meals,
     fetch_restaurants,
     fetch_restaurant_by_name,
@@ -73,16 +75,14 @@ meal_router = APIRouter(prefix="/meal")
         utterance="학식 미가",
     ),
 )
-async def meal_view(  # noqa: C901
+async def meal_view(  # noqa: C901, PLR0912
     payload: Annotated[Payload, Depends(parse_payload)],
     client: Annotated[AsyncClient, Depends(get_async_client)],
 ) -> dict[str, object]:
     """식단 정보를 Carousel TextCard 형태로 반환합니다.
 
-    등록된 식당 정보를 불러와 어제 7시 이후 등록된 식당 정보를 먼저 배치합니다.
-    그 후 어제 7시 이전 등록된 식당 정보를 배치합니다.
-    이를 통해 어제 7시 이후 등록된 식당 정보가 먼저 보이도록 합니다.
-    이를 토대로 점심과 저녁 메뉴를 담은 Carousel을 생성합니다.
+    등록된 식단을 제공일과 등록 시각 기준으로 정렬한 뒤 점심과 저녁
+    메뉴를 담은 Carousel을 생성합니다.
 
     ## 카카오 챗봇 연결 정보
     ---
@@ -111,7 +111,7 @@ async def meal_view(  # noqa: C901
     target_cafeteria = extract_text_value(getattr(cafeteria, "value", None))
 
     # 식단 정보를 가져옵니다.
-    meal_list = await fetch_latest_meals(client)
+    meal_list = await fetch_meals_for_date(client, datetime.now(Config.TZ).date())
 
     # cafeteria 값이 있을 경우 해당 식당 정보로 필터링
     if target_cafeteria:
@@ -121,11 +121,7 @@ async def meal_view(  # noqa: C901
     else:
         meals = meal_list
         restaurants = await fetch_restaurants(client, establishment_type="student")
-        student_restaurant_ids = {
-            restaurant.id
-            for restaurant in restaurants
-            if restaurant.establishment_type == "student"
-        }
+        student_restaurant_ids = {restaurant.id for restaurant in restaurants}
 
         logger.debug("식단 정보 정렬 시작")
         ordered_meals = sort_meals_for_display(meals, student_restaurant_ids)
@@ -138,8 +134,8 @@ async def meal_view(  # noqa: C901
         elif meal.meal_type == MealType.dinner:
             dinner.append(meal)
         else:
-            logger.warning(
-                "식단 정보 오류: kakao_id=%s, meal_type=%s",
+            logger.debug(
+                "미표시 식사 유형 건너뜀: kakao_id=%s, meal_type=%s",
                 payload.user_request.user.id,
                 meal.meal_type,
             )
@@ -703,11 +699,13 @@ async def meal_menu_delete(
         menu=lunch_menu,
         meal_type=MealType.lunch,
         restaurant_name=restaurant.name,
+        date=datetime.now(Config.TZ).date(),
     )
     dinner_card = MealCard(
         menu=dinner_menu,
         meal_type=MealType.dinner,
         restaurant_name=restaurant.name,
+        date=datetime.now(Config.TZ).date(),
     )
     lunch, dinner = make_meal_cards(lunch_card, dinner_card)
 
@@ -885,11 +883,13 @@ async def meal_register(
         menu=lunch_menu,
         meal_type=MealType.lunch,
         restaurant_name=restaurant.name,
+        date=datetime.now(Config.TZ).date(),
     )
     dinner_meal = MealCard(
         menu=dinner_menu,
         meal_type=MealType.dinner,
         restaurant_name=restaurant.name,
+        date=datetime.now(Config.TZ).date(),
     )
     lunch, dinner = make_meal_cards(lunch_meal, dinner_meal)
     response = meal_response_maker(lunch, dinner, restaurant_name=restaurant.name)
@@ -964,11 +964,23 @@ async def meal_submit(  # noqa: C901
     if has_menu_context(contexts, "lunch_menu", restaurant.name):
         lunch_menu = extract_menu(contexts, "lunch_menu", restaurant.name)
         if lunch_menu:
-            menus_to_submit.append((MealType.lunch, "lunch_menu", lunch_menu))
+            menus_to_submit.append(
+                (
+                    MealType.lunch,
+                    "lunch_menu",
+                    lunch_menu,
+                )
+            )
     if has_menu_context(contexts, "dinner_menu", restaurant.name):
         dinner_menu = extract_menu(contexts, "dinner_menu", restaurant.name)
         if dinner_menu:
-            menus_to_submit.append((MealType.dinner, "dinner_menu", dinner_menu))
+            menus_to_submit.append(
+                (
+                    MealType.dinner,
+                    "dinner_menu",
+                    dinner_menu,
+                )
+            )
 
     if not menus_to_submit:
         logger.info(
@@ -995,6 +1007,7 @@ async def meal_submit(  # noqa: C901
                 "context": context_name,
                 "menu_count": len(menu),
                 "menu": menu,
+                "date": datetime.now(Config.TZ).date().isoformat(),
             }
             for meal_type, context_name, menu in menus_to_submit
         ],

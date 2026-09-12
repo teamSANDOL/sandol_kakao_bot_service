@@ -1,9 +1,9 @@
 """식단/식당 도메인 스키마를 정의합니다."""
 
-from datetime import datetime
+from datetime import date as date_type, datetime
 from enum import Enum
-from typing import Literal, Optional, Dict
-from pydantic import BaseModel
+from typing import Dict, Optional
+from pydantic import AliasChoices, BaseModel, Field
 
 
 class MealType(str, Enum):
@@ -52,7 +52,16 @@ class MealCard(BaseMeal):
     """
 
     restaurant_name: str
+    date: date_type | None = Field(
+        default=None,
+        validation_alias=AliasChoices("date", "served_date"),  # 레거시 internal name 지원
+    )
     updated_at: datetime = datetime.now()  # 현재 시간으로 초기화
+
+    @property
+    def served_date(self) -> date_type | None:
+        """Return the legacy internal name for the meal service date."""
+        return self.date
 
 
 class MealResponse(MealCard):
@@ -118,7 +127,7 @@ class RestaurantSchema(BaseModel):
 
     Attributes:
         name (str): 레스토랑 이름
-        establishment_type (Literal["student", "fixed_menu_restaurant", "fixed_korean_buffet", "variable_korean_buffet"]): 레스토랑 유형
+        establishment_type (str): meal-service가 정의한 레스토랑 유형 식별자
         location (Optional[Location]): 위치 정보
         opening_time (Optional[TimeRange]): 영업 시간
         break_time (Optional[TimeRange]): 휴식 시간
@@ -129,7 +138,7 @@ class RestaurantSchema(BaseModel):
     """
 
     name: str
-    establishment_type: Literal["student", "fixed_menu_restaurant", "fixed_korean_buffet", "variable_korean_buffet"]
+    establishment_type: str
     price: Optional[int] = None
     location: Optional[Location] = None
     opening_time: Optional[TimeRange] = None
