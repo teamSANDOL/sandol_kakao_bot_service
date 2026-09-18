@@ -54,7 +54,7 @@ def get_keycloak_admin_client() -> KeycloakAdmin:
     )
 
 
-def keycloak_user_exists(keycloak_sub: str) -> bool | None:
+async def keycloak_user_exists(keycloak_sub: str) -> bool | None:
     """Keycloak Admin API로 사용자의 존재 여부를 확인합니다.
 
     Returns:
@@ -63,7 +63,7 @@ def keycloak_user_exists(keycloak_sub: str) -> bool | None:
     admin_client = get_keycloak_admin_client()
 
     try:
-        admin_client.get_user(keycloak_sub)
+        await admin_client.a_get_user(keycloak_sub)
     except KeycloakAuthenticationError:
         logger.warning(
             "Keycloak admin authentication failed while checking user existence for sub=%s",
