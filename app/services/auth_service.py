@@ -270,7 +270,7 @@ async def request_token_refresh(
 
     try:
         # python-keycloak이 내부에서 /token 엔드포인트를 호출
-        token_data: dict[str, Any] = kc.refresh_token(refresh_token)
+        token_data: dict[str, Any] = await kc.a_refresh_token(refresh_token)
         logger.debug(
             "Token refresh via Keycloak client succeeded for keycloak_sub=%s",
             keycloak_sub,
