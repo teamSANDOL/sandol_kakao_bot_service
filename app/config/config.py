@@ -84,7 +84,8 @@ class Config:
     KC_ADMIN_ROLE = os.getenv("KC_ADMIN_ROLE", "global_admin")
     # 카카오 응답 예산(5초)을 넘기지 않도록 Keycloak 클라이언트 HTTP 타임아웃을 제한한다.
     # DB 조회·JWT 디코딩 등 나머지 처리 시간을 남겨두기 위해 예산보다 짧게 잡는다.
-    KC_HTTP_TIMEOUT_SECONDS = float(os.getenv("KC_HTTP_TIMEOUT_SECONDS", "3"))
+    # python-keycloak의 timeout 파라미터가 int만 받으므로 초 단위 정수로 둔다.
+    KC_HTTP_TIMEOUT_SECONDS = int(os.getenv("KC_HTTP_TIMEOUT_SECONDS", "3"))
 
     ADMIN_PANEL_ENABLED = os.getenv("ADMIN_PANEL_ENABLED", "true").lower() == "true"
     ADMIN_SESSION_TTL_SECONDS = int(os.getenv("ADMIN_SESSION_TTL_SECONDS", "3600"))

@@ -31,5 +31,5 @@ async def test_request_token_refresh_uses_async_keycloak_client(monkeypatch) -> 
 
     result = await auth_service.request_token_refresh("old-refresh-token")
 
-    assert result["access_token"] == "new-access-token"
+    assert result["access_token"] == "new-access-token"  # noqa: S105
     assert calls == ["old-refresh-token"]
