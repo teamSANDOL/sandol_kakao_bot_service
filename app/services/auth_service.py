@@ -33,13 +33,13 @@ _NONCE_CACHE = FanoutCache(directory=CACHE_DIR, shards=8)
 
 
 def get_keycloak_client() -> KeycloakOpenID:
-    """동기 KeycloakOpenID 인스턴스를 생성합니다."""
+    """KeycloakOpenID 인스턴스를 생성합니다 (동기/비동기 메서드 겸용)."""
     return KeycloakOpenID(
         server_url=Config.KC_SERVER_URL,
         realm_name=Config.KC_REALM,
         client_id=Config.KC_CLIENT_ID,
         client_secret_key=Config.KC_CLIENT_SECRET,
-        timeout=10,
+        timeout=Config.KC_HTTP_TIMEOUT_SECONDS,
     )
 
 
@@ -50,7 +50,7 @@ def get_keycloak_admin_client() -> KeycloakAdmin:
         realm_name=Config.KC_REALM,
         client_id=Config.KC_CLIENT_ID,
         client_secret_key=Config.KC_CLIENT_SECRET,
-        timeout=10,
+        timeout=Config.KC_HTTP_TIMEOUT_SECONDS,
     )
 
 
