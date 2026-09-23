@@ -52,7 +52,12 @@ async def test_handle_keycloak_authentication_failure_deletes_user_on_missing_ac
         error_message="authentication failed",
         response_code=401,
     )
-    monkeypatch.setattr(user_service, "keycloak_user_exists", lambda *_: False)
+    async def fake_keycloak_user_exists(*_: object) -> bool | None:
+        return False
+
+    monkeypatch.setattr(
+        user_service, "keycloak_user_exists", fake_keycloak_user_exists
+    )
 
     with pytest.raises(LoginRequiredError) as exc_info:
         await user_service.handle_keycloak_authentication_failure(
@@ -78,7 +83,12 @@ async def test_handle_keycloak_authentication_failure_clears_session_on_generic_
         error_message="authentication failed",
         response_code=401,
     )
-    monkeypatch.setattr(user_service, "keycloak_user_exists", lambda *_: True)
+    async def fake_keycloak_user_exists(*_: object) -> bool | None:
+        return True
+
+    monkeypatch.setattr(
+        user_service, "keycloak_user_exists", fake_keycloak_user_exists
+    )
 
     with pytest.raises(LoginRequiredError) as exc_info:
         await user_service.handle_keycloak_authentication_failure(
@@ -108,7 +118,12 @@ async def test_handle_keycloak_authentication_failure_does_not_delete_user_when_
         error_message="authentication failed",
         response_code=401,
     )
-    monkeypatch.setattr(user_service, "keycloak_user_exists", lambda *_: None)
+    async def fake_keycloak_user_exists(*_: object) -> bool | None:
+        return None
+
+    monkeypatch.setattr(
+        user_service, "keycloak_user_exists", fake_keycloak_user_exists
+    )
 
     with pytest.raises(LoginRequiredError):
         await user_service.handle_keycloak_authentication_failure(

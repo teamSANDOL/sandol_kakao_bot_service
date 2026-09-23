@@ -33,13 +33,13 @@ _NONCE_CACHE = FanoutCache(directory=CACHE_DIR, shards=8)
 
 
 def get_keycloak_client() -> KeycloakOpenID:
-    """동기 KeycloakOpenID 인스턴스를 생성합니다."""
+    """KeycloakOpenID 인스턴스를 생성합니다 (동기/비동기 메서드 겸용)."""
     return KeycloakOpenID(
         server_url=Config.KC_SERVER_URL,
         realm_name=Config.KC_REALM,
         client_id=Config.KC_CLIENT_ID,
         client_secret_key=Config.KC_CLIENT_SECRET,
-        timeout=10,
+        timeout=Config.KC_HTTP_TIMEOUT_SECONDS,
     )
 
 
@@ -50,11 +50,11 @@ def get_keycloak_admin_client() -> KeycloakAdmin:
         realm_name=Config.KC_REALM,
         client_id=Config.KC_CLIENT_ID,
         client_secret_key=Config.KC_CLIENT_SECRET,
-        timeout=10,
+        timeout=Config.KC_HTTP_TIMEOUT_SECONDS,
     )
 
 
-def keycloak_user_exists(keycloak_sub: str) -> bool | None:
+async def keycloak_user_exists(keycloak_sub: str) -> bool | None:
     """Keycloak Admin API로 사용자의 존재 여부를 확인합니다.
 
     Returns:
@@ -63,7 +63,7 @@ def keycloak_user_exists(keycloak_sub: str) -> bool | None:
     admin_client = get_keycloak_admin_client()
 
     try:
-        admin_client.get_user(keycloak_sub)
+        await admin_client.a_get_user(keycloak_sub)
     except KeycloakAuthenticationError:
         logger.warning(
             "Keycloak admin authentication failed while checking user existence for sub=%s",
@@ -270,7 +270,7 @@ async def request_token_refresh(
 
     try:
         # python-keycloak이 내부에서 /token 엔드포인트를 호출
-        token_data: dict[str, Any] = kc.refresh_token(refresh_token)
+        token_data: dict[str, Any] = await kc.a_refresh_token(refresh_token)
         logger.debug(
             "Token refresh via Keycloak client succeeded for keycloak_sub=%s",
             keycloak_sub,

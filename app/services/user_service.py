@@ -116,7 +116,7 @@ async def handle_keycloak_authentication_failure(
     error: KeycloakAuthenticationError,
 ) -> NoReturn:
     """Keycloak 인증 실패를 사용자 상태에 맞게 정리하고 재로그인을 유도합니다."""
-    user_exists = keycloak_user_exists(user.keycloak_id)
+    user_exists = await keycloak_user_exists(user.keycloak_id)
 
     if user_exists is False:
         await cleanup_user_auth_state(
