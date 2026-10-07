@@ -1,9 +1,12 @@
 """Keycloak 인증 컨텍스트가 포함된 HTTP 클라이언트를 제공합니다."""
 
-from typing import AsyncGenerator
 from collections.abc import Mapping
+from typing import AsyncGenerator
 
-from httpx import AsyncClient, Request
+from httpx import AsyncClient, Request, Timeout
+
+
+DOWNSTREAM_TIMEOUT = Timeout(3.0, connect=1.0)
 
 
 class XUserIDClient(AsyncClient):
@@ -33,6 +36,7 @@ class XUserIDClient(AsyncClient):
     ) -> None:
         """클라이언트를 초기화하고 헤더 주입용 컨텍스트를 저장합니다."""
         kwargs.setdefault("follow_redirects", True)
+        kwargs.setdefault("timeout", DOWNSTREAM_TIMEOUT)
         super().__init__(**kwargs)
         self.user_id = user_id
         self.access_token = access_token
@@ -66,5 +70,5 @@ async def get_async_client() -> AsyncGenerator[AsyncClient, None]:
     Returns:
         AsyncClient: 인증 정보가 없는 기본 HTTP 클라이언트.
     """
-    async with AsyncClient(follow_redirects=True) as client:
+    async with AsyncClient(follow_redirects=True, timeout=DOWNSTREAM_TIMEOUT) as client:
         yield client

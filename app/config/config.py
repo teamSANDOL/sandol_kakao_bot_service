@@ -4,13 +4,13 @@
 또한, meal_types.json 파일에서 식사 유형을 불러오는 기능도 포함되어 있습니다.
 """
 
-import os
 import logging
+import os
+
 from dotenv import load_dotenv
 from pytz import timezone
 
 from app.validators.redirects import normalize_optional_relative_path
-
 
 # 환경 변수 로딩
 load_dotenv()
@@ -18,6 +18,7 @@ load_dotenv()
 CONFIG_DIR = os.path.dirname(__file__)
 DEFAULT_CACHE_DIR = os.path.abspath(os.path.join(CONFIG_DIR, "..", "..", ".cache"))
 CACHE_DIR = os.getenv("CACHE_DIR", DEFAULT_CACHE_DIR)
+KAKAO_SKILL_TIMEOUT_SECONDS = 5.0
 
 # 로깅 설정
 logger = logging.getLogger("sandol_kakao_bot_service")
@@ -43,6 +44,10 @@ class Config:
     """
 
     debug = os.getenv("DEBUG", "False").lower() == "true"
+
+    KAKAO_REQUEST_TIMEOUT_SECONDS = float(
+        os.getenv("KAKAO_REQUEST_TIMEOUT_SECONDS", "4.0")
+    )
 
     BASE_URL = os.getenv("BASE_URL", "https://sandol.sio2.kr/kakao-bot").rstrip("/")
 
@@ -100,6 +105,10 @@ class Config:
 
     @classmethod
     def _validate(cls) -> None:
+        if not 0 < cls.KAKAO_REQUEST_TIMEOUT_SECONDS < KAKAO_SKILL_TIMEOUT_SECONDS:
+            raise ValueError(
+                "KAKAO_REQUEST_TIMEOUT_SECONDS must be greater than 0 and less than 5."
+            )
         if not cls.TOKEN_ENCRYPTION_KEY:
             raise RuntimeError("TOKEN_ENCRYPTION_KEY environment variable must be set.")
         if not cls.debug and not cls.KC_CLIENT_SECRET:

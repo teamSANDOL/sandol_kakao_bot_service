@@ -34,6 +34,7 @@ from app.routers import (
 from app.config import Config, logger
 from app.database import init_db, async_engine
 from app.utils import error_message, parse_payload
+from app.utils.kakao_route import KakaoTimeoutRoute
 from app.utils.kakao import (
     KakaoError,
     LoginRequiredError,
@@ -67,6 +68,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan, root_path="/kakao-bot")
+app.router.route_class = KakaoTimeoutRoute
 app.include_router(meal_router)
 app.include_router(user_router)
 app.include_router(statics_router)

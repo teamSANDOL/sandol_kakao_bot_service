@@ -38,6 +38,7 @@ from app.services.meal_service import (
 from app.services.static_service import fetch_weekly_menu_img_links
 from app.services.user_service import get_xuser_client_by_payload, get_current_user
 from app.utils.http import XUserIDClient, get_async_client
+from app.utils.kakao_route import KakaoTimeoutRoute
 from app.utils import create_openapi_extra
 from app.utils.kakao import (
     dump_kakao_value_json,
@@ -60,7 +61,7 @@ from app.utils.meal import (
     make_weekly_menu_components,
 )
 
-meal_router = APIRouter(prefix="/meal")
+meal_router = APIRouter(prefix="/meal", route_class=KakaoTimeoutRoute)
 
 
 @meal_router.post(
