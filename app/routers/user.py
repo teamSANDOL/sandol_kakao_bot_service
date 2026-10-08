@@ -34,13 +34,14 @@ from app.services.user_service import (
 )
 from app.utils.db import get_db
 from app.utils.http import get_async_client
+from app.utils.kakao_route import KakaoTimeoutRoute
 from app.utils.kakao import KakaoError, parse_payload
 from app.utils.user import (
     make_login_link_response,
     make_user_info_response,
 )
 
-user_router = APIRouter(prefix="/users", tags=["User"])
+user_router = APIRouter(prefix="/users", tags=["User"], route_class=KakaoTimeoutRoute)
 
 
 @user_router.post("/get_login_link")

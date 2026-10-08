@@ -20,6 +20,7 @@ from app.services.classroom_timetable_service import (
 )
 from app.utils import create_openapi_extra
 from app.utils.http import get_async_client
+from app.utils.kakao_route import KakaoTimeoutRoute
 from app.utils.kakao import parse_payload, extract_text_value
 from app.utils.classroom import (
     make_empty_classroom_components,
@@ -27,7 +28,7 @@ from app.utils.classroom import (
     parse_day_name,
 )
 
-classroom_router = APIRouter(prefix="/classroom")
+classroom_router = APIRouter(prefix="/classroom", route_class=KakaoTimeoutRoute)
 
 
 @classroom_router.post(
