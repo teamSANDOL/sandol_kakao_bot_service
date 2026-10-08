@@ -31,6 +31,7 @@ class DummyDB:
 def make_user(**overrides: object) -> SimpleNamespace:
     now = datetime.now(timezone.utc)
     user = SimpleNamespace(
+        id=1,
         keycloak_id="keycloak-sub-1",
         access_token=encrypt_token("access-token"),
         refresh_token=encrypt_token("refresh-token"),
@@ -83,7 +84,7 @@ async def test_perform_token_refresh_clears_auth_state_on_terminal_refresh_failu
     assert user.access_token_expires_at is None
     assert user.refresh_token_expires_at is None
     assert db.committed is True
-    assert db.refreshed is True
+    assert db.refreshed is False
 
 
 @pytest.mark.asyncio
@@ -108,7 +109,7 @@ async def test_perform_token_refresh_keeps_auth_state_on_non_terminal_failure(
 
     assert user.access_token == original_access_token
     assert user.refresh_token == original_refresh_token
-    assert db.committed is False
+    assert db.committed is True
     assert db.refreshed is False
 
 

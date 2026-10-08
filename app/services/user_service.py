@@ -1,15 +1,17 @@
 """User Service Module."""
 
+import asyncio
 from datetime import datetime, timezone, timedelta
 from enum import StrEnum
 from typing import Annotated, AsyncGenerator, NoReturn
+from weakref import WeakValueDictionary
 
 import jwt
 from fastapi import Depends, Header, HTTPException
 from httpx import AsyncClient
 from keycloak import KeycloakError
 from keycloak.exceptions import KeycloakAuthenticationError
-from sqlalchemy import or_, select
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from kakao_chatbot import Payload
@@ -34,6 +36,17 @@ from app.utils.kakao import (
     parse_payload,
 )
 from app.utils.security import decrypt_token, encrypt_token
+
+_token_refresh_locks: WeakValueDictionary[int, asyncio.Lock] = WeakValueDictionary()
+
+
+def _get_token_refresh_lock(user_id: int) -> asyncio.Lock:
+    """사용자별 token refresh lock을 반환한다."""
+    lock = _token_refresh_locks.get(user_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _token_refresh_locks[user_id] = lock
+    return lock
 
 
 class UserAuthCleanupMode(StrEnum):
@@ -114,17 +127,28 @@ async def handle_keycloak_authentication_failure(
     user: User,
     db: AsyncSession,
     error: KeycloakAuthenticationError,
+    *,
+    failed_access_token: str | None = None,
 ) -> NoReturn:
     """Keycloak 인증 실패를 사용자 상태에 맞게 정리하고 재로그인을 유도합니다."""
+    await db.commit()
     user_exists = await keycloak_user_exists(user.keycloak_id)
 
     if user_exists is False:
-        await cleanup_user_auth_state(
-            user,
-            db,
-            mode=UserAuthCleanupMode.DELETE_USER,
-            reason="keycloak_account_missing",
-        )
+        if failed_access_token is None:
+            await cleanup_user_auth_state(
+                user,
+                db,
+                mode=UserAuthCleanupMode.DELETE_USER,
+                reason="keycloak_account_missing",
+            )
+        else:
+            await _cleanup_auth_state_if_token_matches(
+                user,
+                db,
+                failed_access_token,
+                delete_user=True,
+            )
         raise LoginRequiredError(
             message=(
                 "연결된 계정을 찾을 수 없어 저장된 연동 정보를 정리했습니다. "
@@ -138,18 +162,59 @@ async def handle_keycloak_authentication_failure(
             user.keycloak_id,
         )
 
-    await cleanup_user_auth_state(
-        user,
-        db,
-        mode=UserAuthCleanupMode.CLEAR_SESSION,
-        reason="keycloak_authentication_failed",
-    )
+    if failed_access_token is None:
+        await cleanup_user_auth_state(
+            user,
+            db,
+            mode=UserAuthCleanupMode.CLEAR_SESSION,
+            reason="keycloak_authentication_failed",
+        )
+    else:
+        await _cleanup_auth_state_if_token_matches(
+            user,
+            db,
+            failed_access_token,
+            delete_user=False,
+        )
     raise LoginRequiredError(
         message=(
             "사용자 인증 정보가 만료되었거나 더 이상 유효하지 않습니다. "
             '아래 로그인 버튼 또는 "로그인"을 입력해 다시 로그인해주세요.'
         )
     ) from error
+
+
+async def _cleanup_auth_state_if_token_matches(
+    user: User,
+    db: AsyncSession,
+    failed_access_token: str,
+    *,
+    delete_user: bool,
+) -> None:
+    """실패 요청의 token이 아직 DB에 있을 때만 인증 정보를 정리한다."""
+    if delete_user:
+        result = await db.execute(
+            delete(User).where(
+                User.id == user.id,
+                User.access_token == failed_access_token,
+            )
+        )
+    else:
+        result = await db.execute(
+            update(User)
+            .where(User.id == user.id, User.access_token == failed_access_token)
+            .values(
+                access_token=None,
+                refresh_token=None,
+                access_token_expires_at=None,
+                refresh_token_expires_at=None,
+            )
+        )
+
+    if result.rowcount != 1:
+        await db.rollback()
+        raise KakaoError("인증 정보가 갱신되었습니다. 다시 시도해주세요.")
+    await db.commit()
 
 
 async def _perform_token_refresh(user: User, db: AsyncSession) -> str:
@@ -202,6 +267,9 @@ async def _perform_token_refresh(user: User, db: AsyncSession) -> str:
             message='토큰 정보가 유효하지 않습니다. 아래 로그인 버튼 또는 "로그인"을 입력해 다시 로그인해주세요.'
         ) from exc
 
+    # 외부 요청 전에 트랜잭션을 끝내고, 조회 값은 expire_on_commit=False로 유지한다.
+    await db.commit()
+
     try:
         token_response = await request_token_refresh(
             decrypted_refresh_token, keycloak_sub=user.keycloak_id
@@ -219,7 +287,6 @@ async def _perform_token_refresh(user: User, db: AsyncSession) -> str:
         user.access_token_expires_at = None
         user.refresh_token_expires_at = None
         await db.commit()
-        await db.refresh(user)
         raise LoginRequiredError(
             message='로그인 세션이 만료되었습니다. 아래 로그인 버튼 또는 "로그인"을 입력해 다시 로그인해주세요.'
         ) from exc
@@ -239,7 +306,6 @@ async def _perform_token_refresh(user: User, db: AsyncSession) -> str:
         user.refresh_token_expires_at = get_expiry_datetime(refresh_expires_in)
 
         await db.commit()
-        await db.refresh(user)
         logger.info("Token refresh successful for keycloak_sub=%s", user.keycloak_id)
         return encrypted_access_token
     except (KeyError, ValueError, RuntimeError) as exc:
@@ -256,6 +322,19 @@ async def _perform_token_refresh(user: User, db: AsyncSession) -> str:
 
 
 async def resolve_keycloak_context(user: User, db: AsyncSession) -> tuple[str, str]:
+    """사용자별로 token refresh를 직렬화하고 최신 인증 정보를 반환한다."""
+    await db.commit()
+
+    async with _get_token_refresh_lock(user.id):
+        await db.refresh(user)
+        await db.commit()
+        return await _resolve_keycloak_context_locked(user, db)
+
+
+async def _resolve_keycloak_context_locked(
+    user: User,
+    db: AsyncSession,
+) -> tuple[str, str]:
     """사용자 엔티티에 저장된 Keycloak id와 액세스 토큰을 반환합니다."""
     if not user.keycloak_id:
         raise LoginRequiredError(
@@ -404,6 +483,7 @@ async def get_user_info(
 ):
     """Keycloak에서 사용자 정보를 조회합니다."""
     keycloak_sub, access_token = await resolve_keycloak_context(user, db)
+    failed_access_token = user.access_token
 
     keycloak_client = get_keycloak_client()
 
@@ -419,7 +499,12 @@ async def get_user_info(
             keycloak_sub,
             exc,
         )
-        await handle_keycloak_authentication_failure(user, db, exc)
+        await handle_keycloak_authentication_failure(
+            user,
+            db,
+            exc,
+            failed_access_token=failed_access_token,
+        )
     except KeycloakError as exc:
         logger.error(
             "Failed to fetch user info from Keycloak for sub=%s: %s",
