@@ -5,12 +5,17 @@ from collections.abc import Callable, Coroutine
 from typing import Any
 
 from fastapi import Request, Response
-from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
-from kakao_chatbot.response import KakaoResponse
-from kakao_chatbot.response.components import SimpleTextComponent
+from httpx import TimeoutException
 
 from app.config import Config, logger
+from app.utils.kakao import KakaoError
+
+_TIMEOUT_MESSAGE = "처리 시간이 초과되었습니다. 잠시 후 다시 시도해주세요."
+_SUBMIT_TIMEOUT_MESSAGE = (
+    "처리 시간이 초과되어 등록 결과를 확인하지 못했습니다. "
+    "점심/저녁 중 일부만 등록됐을 수 있으니 등록 상태를 먼저 확인해주세요."
+)
 
 
 class KakaoTimeoutRoute(APIRoute):
@@ -27,16 +32,15 @@ class KakaoTimeoutRoute(APIRoute):
             try:
                 async with timeout:
                     return await original_handler(request)
-            except TimeoutError:
-                if not timeout.expired():
+            except (TimeoutError, TimeoutException) as exc:
+                if isinstance(exc, TimeoutError) and not timeout.expired():
                     raise
                 logger.warning("Kakao request timeout: route=%s", self.path)
-                response = KakaoResponse().add_component(
-                    SimpleTextComponent(
-                        "처리 시간이 초과되어 결과를 확인하지 못했습니다. "
-                        "등록 요청이었다면 등록 상태를 먼저 확인해주세요."
-                    )
+                message = (
+                    _SUBMIT_TIMEOUT_MESSAGE
+                    if self.name == "meal_submit"
+                    else _TIMEOUT_MESSAGE
                 )
-                return JSONResponse(response.get_dict(), status_code=200)
+                raise KakaoError(message) from None
 
         return handler

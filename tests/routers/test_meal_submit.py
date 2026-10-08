@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from httpx import ReadTimeout
 from kakao_chatbot.context import Context, ContextParam
 import pytest
 
@@ -15,6 +16,8 @@ from app.schemas.meals import MealResponse, MealType, RestaurantResponse
 from app.services.user_service import get_current_user, get_xuser_client_by_payload
 from app.utils.kakao import parse_payload
 from app.utils.meal import select_restaurant
+from main import kakao_error_handler
+from app.utils.kakao import KakaoError
 
 
 def make_menu_context(
@@ -165,3 +168,54 @@ def test_date_selection_route_and_quick_reply_are_not_exposed() -> None:
         quick_reply.label != "메뉴 제공일 변경"
         for quick_reply in CAFETERIA_REGISTER_QUICK_REPLIES
     )
+
+
+def test_meal_submit_reports_partial_registration_on_http_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    completed: list[MealType] = []
+
+    async def fake_post_meal(
+        meal_type: MealType, menu: list[str], restaurant_id: int, client: object
+    ) -> None:
+        if meal_type == MealType.dinner:
+            raise ReadTimeout("dinner registration timeout")
+        completed.append(meal_type)
+
+    monkeypatch.setattr(meal_router_module, "post_meal", fake_post_meal)
+    payload = SimpleNamespace(
+        user_id="kakao-user-1",
+        contexts=[
+            make_menu_context("lunch_menu", "산돌식당", ["김치찌개"]),
+            make_menu_context("dinner_menu", "산돌식당", ["돈까스"]),
+        ],
+    )
+    restaurant = RestaurantResponse(
+        id=10, name="산돌식당", establishment_type="student"
+    )
+    app = FastAPI(exception_handlers={KakaoError: kakao_error_handler})
+    app.include_router(meal_router)
+
+    def fake_parse_payload() -> SimpleNamespace:
+        return payload
+
+    def fake_user_or_client() -> SimpleNamespace:
+        return SimpleNamespace()
+
+    def fake_select_restaurant() -> RestaurantResponse:
+        return restaurant
+
+    app.dependency_overrides[parse_payload] = fake_parse_payload
+    app.dependency_overrides[get_current_user] = fake_user_or_client
+    app.dependency_overrides[get_xuser_client_by_payload] = fake_user_or_client
+    app.dependency_overrides[select_restaurant] = fake_select_restaurant
+
+    response = TestClient(app).post("/meal/submit", json={})
+
+    assert completed == [MealType.lunch]
+    assert response.status_code == 200
+    data = response.json()
+    assert data["version"] == "2.0"
+    message = data["template"]["outputs"][0]["simpleText"]["text"]
+    assert "점심/저녁 중 일부만 등록됐을 수 있으니" in message
+    assert "등록 상태를 먼저 확인해주세요" in message

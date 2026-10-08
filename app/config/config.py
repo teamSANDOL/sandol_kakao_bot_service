@@ -18,7 +18,8 @@ load_dotenv()
 CONFIG_DIR = os.path.dirname(__file__)
 DEFAULT_CACHE_DIR = os.path.abspath(os.path.join(CONFIG_DIR, "..", "..", ".cache"))
 CACHE_DIR = os.getenv("CACHE_DIR", DEFAULT_CACHE_DIR)
-KAKAO_SKILL_TIMEOUT_SECONDS = 5.0
+# 카카오 플랫폼이 일반 스킬 응답을 기다리는 상한이며 서버 처리 예산과 구분한다.
+KAKAO_PLATFORM_TIMEOUT_SECONDS = 5.0
 
 # 로깅 설정
 logger = logging.getLogger("sandol_kakao_bot_service")
@@ -47,6 +48,12 @@ class Config:
 
     KAKAO_REQUEST_TIMEOUT_SECONDS = float(
         os.getenv("KAKAO_REQUEST_TIMEOUT_SECONDS", "4.0")
+    )
+    DOWNSTREAM_HTTP_TIMEOUT_SECONDS = float(
+        os.getenv("DOWNSTREAM_HTTP_TIMEOUT_SECONDS", "3.0")
+    )
+    DOWNSTREAM_HTTP_CONNECT_TIMEOUT_SECONDS = float(
+        os.getenv("DOWNSTREAM_HTTP_CONNECT_TIMEOUT_SECONDS", "1.0")
     )
 
     BASE_URL = os.getenv("BASE_URL", "https://sandol.sio2.kr/kakao-bot").rstrip("/")
@@ -105,10 +112,20 @@ class Config:
 
     @classmethod
     def _validate(cls) -> None:
-        if not 0 < cls.KAKAO_REQUEST_TIMEOUT_SECONDS < KAKAO_SKILL_TIMEOUT_SECONDS:
+        if not 0 < cls.KAKAO_REQUEST_TIMEOUT_SECONDS < KAKAO_PLATFORM_TIMEOUT_SECONDS:
             raise ValueError(
-                "KAKAO_REQUEST_TIMEOUT_SECONDS must be greater than 0 and less than 5."
+                "KAKAO_REQUEST_TIMEOUT_SECONDS must be greater than 0 and less than "
+                f"{KAKAO_PLATFORM_TIMEOUT_SECONDS:g}."
             )
+        for name in (
+            "DOWNSTREAM_HTTP_TIMEOUT_SECONDS",
+            "DOWNSTREAM_HTTP_CONNECT_TIMEOUT_SECONDS",
+        ):
+            if not 0 < getattr(cls, name) < cls.KAKAO_REQUEST_TIMEOUT_SECONDS:
+                raise ValueError(
+                    f"{name} must be greater than 0 and less than "
+                    "KAKAO_REQUEST_TIMEOUT_SECONDS."
+                )
         if not cls.TOKEN_ENCRYPTION_KEY:
             raise RuntimeError("TOKEN_ENCRYPTION_KEY environment variable must be set.")
         if not cls.debug and not cls.KC_CLIENT_SECRET:

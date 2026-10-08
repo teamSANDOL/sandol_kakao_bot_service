@@ -11,7 +11,7 @@ from typing import Annotated, List, Literal
 
 from fastapi import Depends, APIRouter
 
-from httpx import AsyncClient, HTTPError, HTTPStatusError
+from httpx import AsyncClient, HTTPError, HTTPStatusError, TimeoutException
 from kakao_chatbot import Payload
 from kakao_chatbot.context import Context
 from kakao_chatbot.response import KakaoResponse, QuickReply, ActionEnum
@@ -1042,6 +1042,8 @@ async def meal_submit(  # noqa: C901
                 meal_type.value,
                 repr(result),
             )
+            if isinstance(result, TimeoutException):
+                raise result
             if isinstance(result, HTTPStatusError):
                 errors.append(
                     f"{meal_type.value} 등록 실패 (상태 코드: {result.response.status_code})"

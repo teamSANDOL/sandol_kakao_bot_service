@@ -5,12 +5,22 @@ from typing import AsyncGenerator
 
 from httpx import AsyncClient, Request, Timeout
 
+from app.config import Config
 
-DOWNSTREAM_TIMEOUT = Timeout(3.0, connect=1.0)
+
+def get_downstream_timeout() -> Timeout:
+    """응답 처리 여유를 남기도록 전체 예산보다 짧은 HTTP 단계별 대기를 반환한다."""
+    return Timeout(
+        Config.DOWNSTREAM_HTTP_TIMEOUT_SECONDS,
+        connect=Config.DOWNSTREAM_HTTP_CONNECT_TIMEOUT_SECONDS,
+    )
 
 
 class XUserIDClient(AsyncClient):
     """Keycloak 사용자 정보를 헤더에 포함하여 요청을 전송하는 비동기 HTTP 클라이언트입니다.
+
+    Config 기준 기본 timeout은 connect 1초, read/write/pool 각각 3초다.
+    호출자가 timeout을 지정하면 해당 값을 사용하며 전체 요청 시간 제한은 아니다.
 
     Args:
         user_id (str | None): 요청 헤더에 포함할 Keycloak `id` 값.
@@ -36,7 +46,7 @@ class XUserIDClient(AsyncClient):
     ) -> None:
         """클라이언트를 초기화하고 헤더 주입용 컨텍스트를 저장합니다."""
         kwargs.setdefault("follow_redirects", True)
-        kwargs.setdefault("timeout", DOWNSTREAM_TIMEOUT)
+        kwargs.setdefault("timeout", get_downstream_timeout())
         super().__init__(**kwargs)
         self.user_id = user_id
         self.access_token = access_token
@@ -67,8 +77,13 @@ class XUserIDClient(AsyncClient):
 async def get_async_client() -> AsyncGenerator[AsyncClient, None]:
     """공용 비동기 HTTP 클라이언트를 생성합니다.
 
+    Config 기준 기본 timeout은 connect 1초, read/write/pool 각각 3초다.
+    각 값은 환경 변수로 조정하며 전체 요청 시간 제한은 아니다.
+
     Returns:
         AsyncClient: 인증 정보가 없는 기본 HTTP 클라이언트.
     """
-    async with AsyncClient(follow_redirects=True, timeout=DOWNSTREAM_TIMEOUT) as client:
+    async with AsyncClient(
+        follow_redirects=True, timeout=get_downstream_timeout()
+    ) as client:
         yield client
