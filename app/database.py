@@ -10,7 +10,15 @@ from sqlalchemy.orm import declarative_base
 from app.config import Config
 
 # 비동기 SQLAlchemy 엔진 생성
-async_engine = create_async_engine(Config.DATABASE_URL)
+async_engine = create_async_engine(
+    Config.DATABASE_URL,
+    pool_size=5,
+    max_overflow=5,
+    pool_timeout=0.5,
+    connect_args=(
+        {"timeout": 1} if Config.DATABASE_URL.startswith("sqlite") else {}
+    ),
+)
 
 AsyncSessionLocal = async_sessionmaker(
     bind=async_engine,
