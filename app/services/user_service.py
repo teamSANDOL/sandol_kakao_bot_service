@@ -147,7 +147,8 @@ async def handle_keycloak_authentication_failure(
                 user,
                 db,
                 failed_access_token,
-                delete_user=True,
+                mode=UserAuthCleanupMode.DELETE_USER,
+                reason="keycloak_account_missing",
             )
         raise LoginRequiredError(
             message=(
@@ -174,7 +175,8 @@ async def handle_keycloak_authentication_failure(
             user,
             db,
             failed_access_token,
-            delete_user=False,
+            mode=UserAuthCleanupMode.CLEAR_SESSION,
+            reason="keycloak_authentication_failed",
         )
     raise LoginRequiredError(
         message=(
@@ -189,10 +191,18 @@ async def _cleanup_auth_state_if_token_matches(
     db: AsyncSession,
     failed_access_token: str,
     *,
-    delete_user: bool,
+    mode: UserAuthCleanupMode,
+    reason: str,
 ) -> None:
     """실패 요청의 token이 아직 DB에 있을 때만 인증 정보를 정리한다."""
-    if delete_user:
+    logger.info(
+        "Cleaning up user auth state for reason=%s keycloak_sub=%s mode=%s",
+        reason,
+        user.keycloak_id,
+        mode,
+    )
+
+    if mode is UserAuthCleanupMode.DELETE_USER:
         result = await db.execute(
             delete(User).where(
                 User.id == user.id,
