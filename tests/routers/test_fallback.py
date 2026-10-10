@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from starlette.testclient import TestClient
 
 import main
@@ -177,6 +177,17 @@ async def test_oversized_fields_are_stored_as_none() -> None:
     assert row.params is None
     assert row.detail_params is None
     assert row.flow is None
+    async with AsyncSessionLocal() as session:
+        null_count = await session.scalar(
+            select(func.count())
+            .select_from(FallbackUtterance)
+            .where(
+                FallbackUtterance.params.is_(None),
+                FallbackUtterance.detail_params.is_(None),
+                FallbackUtterance.flow.is_(None),
+            )
+        )
+    assert null_count == 1
     assert row.utterance == "알수없는말"
     assert row.raw_payload is not None
 

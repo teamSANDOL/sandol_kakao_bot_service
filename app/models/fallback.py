@@ -44,9 +44,15 @@ class FallbackUtterance(Base):
     block_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     block_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     bot_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    params: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    detail_params: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    flow: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    params: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON(none_as_null=True), nullable=True
+    )
+    detail_params: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON(none_as_null=True), nullable=True
+    )
+    flow: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON(none_as_null=True), nullable=True
+    )
     trigger_type: Mapped[str | None] = mapped_column(
         String(64), index=True, nullable=True
     )
@@ -56,7 +62,9 @@ class FallbackUtterance(Base):
     trigger_referrer_block_name: Mapped[str | None] = mapped_column(
         String(255), nullable=True
     )
-    raw_payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    raw_payload: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON(none_as_null=True), nullable=True
+    )
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True), index=True, nullable=False, default=_utcnow
     )
