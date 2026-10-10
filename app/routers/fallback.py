@@ -23,12 +23,12 @@ FALLBACK_MESSAGES = (
     "음, 아직 모르는 말이에요. 도움말을 눌러 이용 가능한 기능을 둘러보세요.",
 )
 MAX_UTTERANCE_LENGTH = 500
-MAX_RAW_PAYLOAD_CHARS = 20_000
-# 카카오 params/detailParams는 보통 수백 자 이내, flow는 블록 id/name 몇 개라 ~500자.
-# 정상 범위의 수 배로 잡고, 넘으면 자르지 않고 None으로 저장한다.
-MAX_PARAMS_CHARS = 5_000
-MAX_FLOW_CHARS = 2_000
 MAX_BODY_BYTES = 64 * 1024
+# 원본(raw_payload)은 넓게: 본문 상한과 같은 수준까지 허용한다.
+MAX_RAW_PAYLOAD_CHARS = MAX_BODY_BYTES
+# 파생 필드는 작게: 원본에 같은 내용이 남아 있으므로 넘으면 None으로 저장한다.
+MAX_PARAMS_CHARS = 500
+MAX_FLOW_CHARS = 500
 _SENSITIVE_KEY_PARTS = ("token", "secret", "authorization", "password")
 
 fallback_router = APIRouter(prefix="/fallback", route_class=KakaoTimeoutRoute)

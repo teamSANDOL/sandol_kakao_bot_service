@@ -17,6 +17,7 @@ from app.routers.fallback import (
     MAX_BODY_BYTES,
     MAX_FLOW_CHARS,
     MAX_PARAMS_CHARS,
+    MAX_RAW_PAYLOAD_CHARS,
     MAX_UTTERANCE_LENGTH,
 )
 
@@ -202,3 +203,14 @@ async def test_huge_body_skips_save_but_returns_200() -> None:
     assert response.status_code == 200
     assert _text(response) in FALLBACK_MESSAGES
     assert await _rows() == []
+
+
+@pytest.mark.asyncio
+async def test_large_raw_payload_kept_up_to_limit() -> None:
+    body = _payload()
+    body["extra"] = {"pad": "x" * 40_000}
+    TestClient(main.app).post(URL, json=body)
+
+    [row] = await _rows()
+    assert row.raw_payload is not None
+    assert MAX_RAW_PAYLOAD_CHARS == 64 * 1024
