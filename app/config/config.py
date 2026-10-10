@@ -82,6 +82,9 @@ class Config:
         os.getenv("LOGIN_REDIRECT_AFTER")
     )
 
+    # 도움말 블록 ID. 빈 값이면 "도움말" 발화(message 액션)로 대체한다.
+    HELP_BLOCK_ID = os.getenv("HELP_BLOCK_ID", "67218b3757cc8a7ef532157e").strip()
+
     # 학교 이북 주간 식단표. 이미지를 못 가져올 때 안내할 웹 주소이자 meal-service 크롤러의 원본이다.
     WEEKLY_MENU_URL = os.getenv(
         "WEEKLY_MENU_URL", "https://ibook.tukorea.ac.kr/Viewer/menu02"
