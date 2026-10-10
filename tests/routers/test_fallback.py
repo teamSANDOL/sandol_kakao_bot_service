@@ -12,7 +12,13 @@ from app.database import AsyncSessionLocal, init_db
 from app.models.fallback import FallbackUtterance
 from app.routers import fallback as fallback_module
 from app.config import Config
-from app.routers.fallback import FALLBACK_MESSAGES, MAX_UTTERANCE_LENGTH
+from app.routers.fallback import (
+    FALLBACK_MESSAGES,
+    MAX_BODY_BYTES,
+    MAX_FLOW_CHARS,
+    MAX_PARAMS_CHARS,
+    MAX_UTTERANCE_LENGTH,
+)
 
 URL = "/kakao-bot/fallback"
 
@@ -155,3 +161,44 @@ def test_help_quick_reply_block_action(monkeypatch: pytest.MonkeyPatch) -> None:
     [reply] = _quick_replies(response)
     assert reply["action"] == "block"
     assert reply["blockId"] == "help-block-id"
+
+
+@pytest.mark.asyncio
+async def test_oversized_fields_are_stored_as_none() -> None:
+    body = _payload()
+    body["action"]["params"] = {"a": "x" * MAX_PARAMS_CHARS}
+    body["action"]["detailParams"] = {"a": "x" * MAX_PARAMS_CHARS}
+    body["flow"]["trigger"]["note"] = "x" * MAX_FLOW_CHARS
+    response = TestClient(main.app).post(URL, json=body)
+
+    assert response.status_code == 200
+    [row] = await _rows()
+    assert row.params is None
+    assert row.detail_params is None
+    assert row.flow is None
+    assert row.utterance == "알수없는말"
+    assert row.raw_payload is not None
+
+
+@pytest.mark.asyncio
+async def test_user_properties_removed_but_id_kept() -> None:
+    body = _payload()
+    body["userRequest"]["user"]["properties"] = {"plusfriendUserKey": "pk"}
+    TestClient(main.app).post(URL, json=body)
+
+    [row] = await _rows()
+    assert row.raw_payload is not None
+    user = row.raw_payload["userRequest"]["user"]
+    assert user == {"id": "user-1", "type": "botUserKey"}
+    assert row.kakao_user_id == "user-1"
+
+
+@pytest.mark.asyncio
+async def test_huge_body_skips_save_but_returns_200() -> None:
+    body = _payload()
+    body["userRequest"]["utterance"] = "가" * MAX_BODY_BYTES
+    response = TestClient(main.app).post(URL, json=body)
+
+    assert response.status_code == 200
+    assert _text(response) in FALLBACK_MESSAGES
+    assert await _rows() == []

@@ -24,6 +24,11 @@ FALLBACK_MESSAGES = (
 )
 MAX_UTTERANCE_LENGTH = 500
 MAX_RAW_PAYLOAD_CHARS = 20_000
+# 카카오 params/detailParams는 보통 수백 자 이내, flow는 블록 id/name 몇 개라 ~500자.
+# 정상 범위의 수 배로 잡고, 넘으면 자르지 않고 None으로 저장한다.
+MAX_PARAMS_CHARS = 5_000
+MAX_FLOW_CHARS = 2_000
+MAX_BODY_BYTES = 64 * 1024
 _SENSITIVE_KEY_PARTS = ("token", "secret", "authorization", "password")
 
 fallback_router = APIRouter(prefix="/fallback", route_class=KakaoTimeoutRoute)
@@ -54,12 +59,20 @@ def _get_str(source: dict[str, Any], key: str, limit: int) -> str | None:
     return value[:limit] if isinstance(value, str) else None
 
 
+def _cap(value: dict[str, Any], limit: int) -> dict[str, Any] | None:
+    """비어 있거나 직렬화 길이가 limit을 넘으면 None, 아니면 value를 반환합니다."""
+    if not value or len(json.dumps(value, ensure_ascii=False)) > limit:
+        return None
+    return value
+
+
 def build_record(body: Any) -> FallbackUtterance:
     """카카오 payload(dict)에서 저장할 FallbackUtterance를 만듭니다.
 
     누락/비정상 필드는 None으로 두며 예외를 내지 않습니다.
     원본 payload에서는 callbackUrl과 토큰류 키를 제외하고,
-    직렬화 길이가 상한을 넘으면 원본은 저장하지 않습니다.
+    userRequest.user.properties는 제외합니다.
+    params, detailParams, flow, 원본은 직렬화 길이가 상한을 넘으면 None으로 저장합니다.
 
     Args:
         body (Any): 요청 JSON 본문.
@@ -75,10 +88,10 @@ def build_record(body: Any) -> FallbackUtterance:
         scrubbed: dict[str, Any] = _scrub(body)
         if isinstance(scrubbed.get("userRequest"), dict):
             scrubbed["userRequest"].pop("callbackUrl", None)
-        if len(json.dumps(scrubbed, ensure_ascii=False)) <= MAX_RAW_PAYLOAD_CHARS:
-            raw = scrubbed
+            _get_dict(scrubbed["userRequest"], "user").pop("properties", None)
+        raw = _cap(scrubbed, MAX_RAW_PAYLOAD_CHARS)
 
-    flow = _scrub(_get_dict(body, "flow")) or None
+    flow = _cap(_scrub(_get_dict(body, "flow")), MAX_FLOW_CHARS)
     trigger = _get_dict(flow, "trigger")
     referrer = _get_dict(trigger, "referrerBlock")
 
@@ -88,8 +101,8 @@ def build_record(body: Any) -> FallbackUtterance:
         block_id=_get_str(_get_dict(user_request, "block"), "id", 64),
         block_name=_get_str(_get_dict(user_request, "block"), "name", 255),
         bot_id=_get_str(_get_dict(body, "bot"), "id", 64),
-        params=_scrub(_get_dict(action, "params")) or None,
-        detail_params=_scrub(_get_dict(action, "detailParams")) or None,
+        params=_cap(_scrub(_get_dict(action, "params")), MAX_PARAMS_CHARS),
+        detail_params=_cap(_scrub(_get_dict(action, "detailParams")), MAX_PARAMS_CHARS),
         flow=flow,
         trigger_type=_get_str(trigger, "type", 64),
         trigger_referrer_block_id=_get_str(referrer, "id", 64),
@@ -142,11 +155,16 @@ async def fallback(request: Request):
         JSONResponse: 폴백 안내 SimpleText
     """
     try:
-        body = await request.json()
-        record = build_record(body)
-        async with AsyncSessionLocal() as session:
-            session.add(record)
-            await session.commit()
+        raw_body = await request.body()
+        if len(raw_body) > MAX_BODY_BYTES:
+            logger.warning(
+                "폴백 본문이 너무 커서 저장하지 않음: %d바이트", len(raw_body)
+            )
+        else:
+            record = build_record(json.loads(raw_body))
+            async with AsyncSessionLocal() as session:
+                session.add(record)
+                await session.commit()
     except Exception as exc:  # noqa: BLE001 # pylint: disable=W0718
         # 수집 실패가 사용자 응답을 막지 않도록 모든 예외를 삼킨다.
         # 발화/토큰이 섞일 수 있는 원문은 남기지 않고 예외 타입만 기록한다.
