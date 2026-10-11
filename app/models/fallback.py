@@ -40,10 +40,10 @@ class FallbackUtterance(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     utterance: Mapped[str] = mapped_column(String(500), index=True, nullable=False)
-    kakao_user_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    block_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    kakao_user_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    block_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     block_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    bot_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    bot_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     params: Mapped[dict[str, Any] | None] = mapped_column(
         JSON(none_as_null=True), nullable=True
     )
@@ -57,7 +57,7 @@ class FallbackUtterance(Base):
         String(64), index=True, nullable=True
     )
     trigger_referrer_block_id: Mapped[str | None] = mapped_column(
-        String(64), nullable=True
+        String(128), nullable=True
     )
     trigger_referrer_block_name: Mapped[str | None] = mapped_column(
         String(255), nullable=True

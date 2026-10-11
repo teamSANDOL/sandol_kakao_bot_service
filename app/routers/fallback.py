@@ -97,15 +97,15 @@ def build_record(body: Any) -> FallbackUtterance:
 
     return FallbackUtterance(
         utterance=_get_str(user_request, "utterance", MAX_UTTERANCE_LENGTH) or "",
-        kakao_user_id=_get_str(_get_dict(user_request, "user"), "id", 64),
-        block_id=_get_str(_get_dict(user_request, "block"), "id", 64),
+        kakao_user_id=_get_str(_get_dict(user_request, "user"), "id", 128),
+        block_id=_get_str(_get_dict(user_request, "block"), "id", 128),
         block_name=_get_str(_get_dict(user_request, "block"), "name", 255),
-        bot_id=_get_str(_get_dict(body, "bot"), "id", 64),
+        bot_id=_get_str(_get_dict(body, "bot"), "id", 128),
         params=_cap(_scrub(_get_dict(action, "params")), MAX_PARAMS_CHARS),
         detail_params=_cap(_scrub(_get_dict(action, "detailParams")), MAX_PARAMS_CHARS),
         flow=flow,
         trigger_type=_get_str(trigger, "type", 64),
-        trigger_referrer_block_id=_get_str(referrer, "id", 64),
+        trigger_referrer_block_id=_get_str(referrer, "id", 128),
         trigger_referrer_block_name=_get_str(referrer, "name", 255),
         raw_payload=raw,
     )

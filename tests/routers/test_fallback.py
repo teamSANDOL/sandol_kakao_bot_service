@@ -225,3 +225,20 @@ async def test_large_raw_payload_kept_up_to_limit() -> None:
     [row] = await _rows()
     assert row.raw_payload is not None
     assert MAX_RAW_PAYLOAD_CHARS == 64 * 1024
+
+
+@pytest.mark.asyncio
+async def test_long_identifiers_are_stored_intact() -> None:
+    user_id = "u" * 66
+    body = _payload()
+    body["userRequest"]["user"]["id"] = user_id
+    body["bot"]["id"] = "b" * 66
+    body["userRequest"]["block"]["id"] = "k" * 66
+    body["flow"]["trigger"]["referrerBlock"]["id"] = "r" * 66
+    TestClient(main.app).post(URL, json=body)
+
+    [row] = await _rows()
+    assert row.kakao_user_id == user_id
+    assert row.bot_id == "b" * 66
+    assert row.block_id == "k" * 66
+    assert row.trigger_referrer_block_id == "r" * 66
