@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, text
 from starlette.testclient import TestClient
 
 import main
@@ -242,3 +242,15 @@ async def test_long_identifiers_are_stored_intact() -> None:
     assert row.bot_id == "b" * 66
     assert row.block_id == "k" * 66
     assert row.trigger_referrer_block_id == "r" * 66
+
+
+@pytest.mark.asyncio
+async def test_json_columns_store_korean_unescaped() -> None:
+    TestClient(main.app).post(URL, json=_payload())
+
+    async with AsyncSessionLocal() as session:
+        stored = await session.scalar(
+            text("SELECT raw_payload FROM fallback_utterances")
+        )
+    assert "알수없는말" in stored
+    assert "\u" not in stored
