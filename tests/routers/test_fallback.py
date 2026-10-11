@@ -253,4 +253,4 @@ async def test_json_columns_store_korean_unescaped() -> None:
             text("SELECT raw_payload FROM fallback_utterances")
         )
     assert "알수없는말" in stored
-    assert "\u" not in stored
+    assert "\\u" not in stored
