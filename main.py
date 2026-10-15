@@ -31,6 +31,7 @@ from app.routers import (
     notice_router,
     classroom_router,
     fallback_router,
+    tuk_world_router,
 )
 from app.config import Config, logger
 from app.database import init_db, async_engine
@@ -75,6 +76,7 @@ app.include_router(user_router)
 app.include_router(statics_router)
 app.include_router(notice_router)
 app.include_router(classroom_router)
+app.include_router(tuk_world_router)
 app.include_router(fallback_router)
 
 # Admin 패널은 Keycloak OIDC 인증(KC_ADMIN_ROLE 롤 필수)이 가능할 때만 마운트한다.

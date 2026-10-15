@@ -6,3 +6,4 @@ from app.routers.statics import statics_router
 from app.routers.notice import notice_router
 from app.routers.classroom import classroom_router
 from app.routers.fallback import fallback_router
+from app.routers.tuk_world import tuk_world_router

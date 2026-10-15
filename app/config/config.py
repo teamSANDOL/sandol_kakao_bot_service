@@ -6,6 +6,7 @@
 
 import logging
 import os
+from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
 from pytz import timezone
@@ -89,6 +90,19 @@ class Config:
     WEEKLY_MENU_URL = os.getenv(
         "WEEKLY_MENU_URL", "https://ibook.tukorea.ac.kr/Viewer/menu02"
     )
+
+    # TUK World(총학생회 제휴 업체). 블록 ID는 오픈빌더에서 만든 뒤 채운다.
+    # 목록 블록이 비면 분류 전환은 발화(message) 액션, 더 보기는 숨긴다.
+    # 상세 블록이 비면 목록 항목이 카카오맵 링크로 대체된다.
+    TUK_WORLD_BLOCK_ID = os.getenv("TUK_WORLD_BLOCK_ID", "").strip()
+    TUK_WORLD_DETAIL_BLOCK_ID = os.getenv("TUK_WORLD_DETAIL_BLOCK_ID", "").strip()
+    # TUK World 지도 페이지 주소. 비면 목록의 지도 버튼을 숨긴다.
+    TUK_WORLD_MAP_URL = os.getenv("TUK_WORLD_MAP_URL", "").strip()
+    # static-info 이미지 상대경로 앞에 붙일 공개 origin. 비면 BASE_URL의 origin을 쓴다.
+    STATIC_INFO_PUBLIC_URL = (
+        os.getenv("STATIC_INFO_PUBLIC_URL", "").strip()
+        or "{0.scheme}://{0.netloc}".format(urlsplit(BASE_URL))
+    ).rstrip("/")
 
     KC_SERVER_URL = (
         os.getenv("KC_SERVER_URL", "https://sandol.sio2.kr/auth/").rstrip("/") + "/"
