@@ -208,13 +208,8 @@ async def _cleanup_auth_state_if_token_matches(
     Raises:
         KakaoError: 요청 중 다른 경로가 인증 정보를 바꿔 정리를 건너뛴 경우.
     """
-    logger.info(
-        "Cleaning up user auth state for reason=%s keycloak_sub=%s mode=%s",
-        reason,
-        user.keycloak_id,
-        mode,
-    )
-
+    # rollback 뒤에는 ORM 속성이 만료되므로 로그용 값을 미리 읽어 둔다.
+    keycloak_sub = user.keycloak_id
     if mode is UserAuthCleanupMode.DELETE_USER:
         result = await db.execute(
             delete(User).where(
@@ -236,8 +231,21 @@ async def _cleanup_auth_state_if_token_matches(
 
     if result.rowcount != 1:
         await db.rollback()
+        logger.info(
+            "Skipped auth state cleanup because token changed for reason=%s "
+            "keycloak_sub=%s mode=%s",
+            reason,
+            keycloak_sub,
+            mode,
+        )
         raise KakaoError("인증 정보가 갱신되었습니다. 다시 시도해주세요.")
     await db.commit()
+    logger.info(
+        "Cleaning up user auth state for reason=%s keycloak_sub=%s mode=%s",
+        reason,
+        keycloak_sub,
+        mode,
+    )
 
 
 async def _perform_token_refresh(user: User, db: AsyncSession) -> str:

@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator
 from datetime import datetime, timedelta, timezone
+import logging
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -229,3 +230,41 @@ async def test_refresh_unauthorized_keeps_auth_state_replaced_during_request(
         assert stored.refresh_token is not None
         assert decrypt_token(stored.access_token) == "relogin-access"
         assert decrypt_token(stored.refresh_token) == "relogin-refresh"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("token_matches", [True, False])
+async def test_conditional_cleanup_logs_only_actual_cleanup(
+    user_session: tuple[AsyncSession, User],
+    caplog: pytest.LogCaptureFixture,
+    token_matches: bool,
+) -> None:
+    db, user = user_session
+    stored_token = user.access_token
+    assert stored_token is not None
+    failed_token = stored_token if token_matches else encrypt_token("stale-access")
+    caplog.set_level(logging.DEBUG, logger="sandol_kakao_bot_service")
+
+    if token_matches:
+        await user_service._cleanup_auth_state_if_token_matches(
+            user,
+            db,
+            User.access_token == failed_token,
+            mode=user_service.UserAuthCleanupMode.CLEAR_SESSION,
+            reason="test",
+        )
+    else:
+        with pytest.raises(KakaoError):
+            await user_service._cleanup_auth_state_if_token_matches(
+                user,
+                db,
+                User.access_token == failed_token,
+                mode=user_service.UserAuthCleanupMode.CLEAR_SESSION,
+                reason="test",
+            )
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert any(m.startswith("Cleaning up") for m in messages) is token_matches
+    assert any(m.startswith("Skipped") for m in messages) is not token_matches
+    assert stored_token not in caplog.text
+    assert failed_token not in caplog.text
