@@ -229,4 +229,3 @@ async def test_refresh_unauthorized_keeps_auth_state_replaced_during_request(
         assert stored.refresh_token is not None
         assert decrypt_token(stored.access_token) == "relogin-access"
         assert decrypt_token(stored.refresh_token) == "relogin-refresh"
-
