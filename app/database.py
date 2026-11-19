@@ -26,6 +26,9 @@ _connect_args: dict[str, Any] = (
 )
 async_engine = create_async_engine(
     Config.DATABASE_URL,
+    pool_size=5,
+    max_overflow=5,
+    pool_timeout=0.5,
     connect_args=_connect_args,
     json_serializer=_json_serializer,
 )

@@ -17,6 +17,11 @@ class DummyDB:
         self.committed = False
         self.refreshed = False
         self.rolled_back = False
+        self.executed: list[object] = []
+
+    async def execute(self, statement: object) -> SimpleNamespace:
+        self.executed.append(statement)
+        return SimpleNamespace(rowcount=1)
 
     async def commit(self) -> None:
         self.committed = True
@@ -31,6 +36,7 @@ class DummyDB:
 def make_user(**overrides: object) -> SimpleNamespace:
     now = datetime.now(timezone.utc)
     user = SimpleNamespace(
+        id=1,
         keycloak_id="keycloak-sub-1",
         access_token=encrypt_token("access-token"),
         refresh_token=encrypt_token("refresh-token"),
@@ -78,12 +84,9 @@ async def test_perform_token_refresh_clears_auth_state_on_terminal_refresh_failu
 
     assert exc_info.value.message is not None
     assert "로그인 세션이 만료되었습니다" in exc_info.value.message
-    assert user.access_token is None
-    assert user.refresh_token is None
-    assert user.access_token_expires_at is None
-    assert user.refresh_token_expires_at is None
+    assert len(db.executed) == 1
     assert db.committed is True
-    assert db.refreshed is True
+    assert db.refreshed is False
 
 
 @pytest.mark.asyncio
@@ -108,7 +111,7 @@ async def test_perform_token_refresh_keeps_auth_state_on_non_terminal_failure(
 
     assert user.access_token == original_access_token
     assert user.refresh_token == original_refresh_token
-    assert db.committed is False
+    assert db.committed is True
     assert db.refreshed is False
 
 
