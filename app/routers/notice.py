@@ -22,10 +22,11 @@ from app.services.notice_service import (
 )
 from app.utils import create_openapi_extra
 from app.utils.http import get_async_client
+from app.utils.kakao_route import KakaoTimeoutRoute
 from app.utils.kakao import parse_payload, extract_text_value
 from app.utils.notice import make_notice_component
 
-notice_router = APIRouter(prefix="/notice")
+notice_router = APIRouter(prefix="/notice", route_class=KakaoTimeoutRoute)
 
 
 @notice_router.post(

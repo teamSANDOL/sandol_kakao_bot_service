@@ -11,7 +11,7 @@ from typing import Annotated, List, Literal
 
 from fastapi import Depends, APIRouter
 
-from httpx import AsyncClient, HTTPError, HTTPStatusError
+from httpx import AsyncClient, HTTPError, HTTPStatusError, TimeoutException
 from kakao_chatbot import Payload
 from kakao_chatbot.context import Context
 from kakao_chatbot.response import KakaoResponse, QuickReply, ActionEnum
@@ -38,6 +38,7 @@ from app.services.meal_service import (
 from app.services.static_service import fetch_weekly_menu_img_links
 from app.services.user_service import get_xuser_client_by_payload, get_current_user
 from app.utils.http import XUserIDClient, get_async_client
+from app.utils.kakao_route import KakaoTimeoutRoute
 from app.utils import create_openapi_extra
 from app.utils.kakao import (
     dump_kakao_value_json,
@@ -60,7 +61,7 @@ from app.utils.meal import (
     make_weekly_menu_components,
 )
 
-meal_router = APIRouter(prefix="/meal")
+meal_router = APIRouter(prefix="/meal", route_class=KakaoTimeoutRoute)
 
 
 @meal_router.post(
@@ -1041,6 +1042,8 @@ async def meal_submit(  # noqa: C901
                 meal_type.value,
                 repr(result),
             )
+            if isinstance(result, TimeoutException):
+                raise result
             if isinstance(result, HTTPStatusError):
                 errors.append(
                     f"{meal_type.value} 등록 실패 (상태 코드: {result.response.status_code})"

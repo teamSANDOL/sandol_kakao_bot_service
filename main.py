@@ -22,7 +22,7 @@ from app.admin_auth import (
     validate_admin_access_token,
     verify_state_cookie,
 )
-from app.models.admin import UserAdmin
+from app.models.admin import FallbackUtteranceAdmin, UserAdmin
 from app.services.auth_service import get_keycloak_client
 from app.routers import (
     meal_router,
@@ -30,10 +30,12 @@ from app.routers import (
     statics_router,
     notice_router,
     classroom_router,
+    fallback_router,
 )
 from app.config import Config, logger
 from app.database import init_db, async_engine
 from app.utils import error_message, parse_payload
+from app.utils.kakao_route import KakaoTimeoutRoute
 from app.utils.kakao import (
     KakaoError,
     LoginRequiredError,
@@ -67,11 +69,13 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan, root_path="/kakao-bot")
+app.router.route_class = KakaoTimeoutRoute
 app.include_router(meal_router)
 app.include_router(user_router)
 app.include_router(statics_router)
 app.include_router(notice_router)
 app.include_router(classroom_router)
+app.include_router(fallback_router)
 
 # Admin 패널은 Keycloak OIDC 인증(KC_ADMIN_ROLE 롤 필수)이 가능할 때만 마운트한다.
 # 인증을 구성할 수 없으면 마운트하지 않아 외부에 노출되지 않는다 (fail-closed).
@@ -82,6 +86,7 @@ if Config.ADMIN_PANEL_ENABLED and Config.KC_CLIENT_SECRET:
         authentication_backend=KeycloakAdminAuth(),
     )
     admin.add_view(UserAdmin)
+    admin.add_view(FallbackUtteranceAdmin)
 else:
     logger.warning(
         "Admin panel is NOT mounted (%s)",

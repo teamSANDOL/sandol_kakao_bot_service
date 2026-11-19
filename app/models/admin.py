@@ -2,6 +2,7 @@
 
 from sqladmin import ModelView
 
+from app.models.fallback import FallbackUtterance
 from app.models.users import User
 
 
@@ -55,4 +56,31 @@ class UserAdmin(ModelView, model=User):
     can_create = True
     can_edit = True
     can_delete = True
+    can_view_details = True
+
+
+class FallbackUtteranceAdmin(ModelView, model=FallbackUtterance):
+    """Admin view를 위한 폴백 발화 읽기 전용 모델 뷰 클래스."""
+
+    name = "Fallback Utterance"
+    name_plural = "Fallback Utterances"
+    icon = "fa-solid fa-comment-slash"
+
+    column_list = [
+        FallbackUtterance.id,
+        FallbackUtterance.utterance,
+        FallbackUtterance.kakao_user_id,
+        FallbackUtterance.block_name,
+        FallbackUtterance.created_at,
+    ]
+    column_searchable_list = [FallbackUtterance.utterance]
+    column_sortable_list = [FallbackUtterance.utterance, FallbackUtterance.created_at]
+    column_default_sort = [(FallbackUtterance.created_at, True)]
+
+    page_size = 50
+    page_size_options = [25, 50, 100]
+
+    can_create = False
+    can_edit = False
+    can_delete = False
     can_view_details = True
