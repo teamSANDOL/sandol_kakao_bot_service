@@ -8,13 +8,13 @@ import pytest_asyncio
 from fastapi import HTTPException
 from httpx import AsyncClient
 from keycloak.exceptions import KeycloakAuthenticationError
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 
 from app.database import AsyncSessionLocal
 from app.models.users import User
 from app.services import user_service
-from app.utils.kakao import LoginRequiredError
+from app.utils.kakao import KakaoError, LoginRequiredError
 from app.utils.security import decrypt_token, encrypt_token
 
 
@@ -196,3 +196,37 @@ async def test_auth_failure_releases_connection_before_account_lookup(
             assert stored is not None
             assert stored.access_token is None
             assert stored.refresh_token is None
+
+
+@pytest.mark.asyncio
+async def test_refresh_unauthorized_keeps_auth_state_replaced_during_request(
+    engine: AsyncEngine,
+    user_session: tuple[AsyncSession, User],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db, user = user_session
+
+    async def refresh(refresh_value: str, *, keycloak_sub: str) -> dict[str, object]:
+        assert refresh_value == "old-refresh"
+        async with AsyncSessionLocal(bind=engine) as writer:
+            await writer.execute(
+                update(User).values(
+                    access_token=encrypt_token("relogin-access"),
+                    refresh_token=encrypt_token("relogin-refresh"),
+                )
+            )
+            await writer.commit()
+        raise HTTPException(status_code=401, detail="session_expired")
+
+    monkeypatch.setattr(user_service, "request_token_refresh", refresh)
+    with pytest.raises(KakaoError):
+        await user_service._perform_token_refresh(user, db)
+
+    assert not db.in_transaction()
+    async with AsyncSessionLocal(bind=engine) as reader:
+        stored = (await reader.execute(select(User))).scalar_one()
+        assert stored.access_token is not None
+        assert stored.refresh_token is not None
+        assert decrypt_token(stored.access_token) == "relogin-access"
+        assert decrypt_token(stored.refresh_token) == "relogin-refresh"
+

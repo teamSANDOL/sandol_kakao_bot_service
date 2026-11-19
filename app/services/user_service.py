@@ -13,6 +13,7 @@ from keycloak import KeycloakError
 from keycloak.exceptions import KeycloakAuthenticationError
 from sqlalchemy import delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 
 from kakao_chatbot import Payload
 from kakao_chatbot.response import KakaoResponse
@@ -189,12 +190,25 @@ async def handle_keycloak_authentication_failure(
 async def _cleanup_auth_state_if_token_matches(
     user: User,
     db: AsyncSession,
-    failed_access_token: str,
+    failed_token: str,
     *,
     mode: UserAuthCleanupMode,
     reason: str,
+    token_column: InstrumentedAttribute[str | None] = User.access_token,
 ) -> None:
-    """실패 요청의 token이 아직 DB에 있을 때만 인증 정보를 정리한다."""
+    """실패 요청의 token이 아직 DB에 있을 때만 인증 정보를 정리한다.
+
+    Args:
+        user (User): 정리 대상 사용자 엔티티.
+        db (AsyncSession): 데이터베이스 세션.
+        failed_token (str): 실패한 요청에 쓴 암호화 token.
+        mode (UserAuthCleanupMode): 세션 초기화 또는 사용자 연동 레코드 삭제 방식.
+        reason (str): 정리 사유 로그용 문자열.
+        token_column (InstrumentedAttribute[str | None]): failed_token과 비교할 컬럼.
+
+    Raises:
+        KakaoError: 요청 중 다른 경로가 인증 정보를 바꿔 정리를 건너뛴 경우.
+    """
     logger.info(
         "Cleaning up user auth state for reason=%s keycloak_sub=%s mode=%s",
         reason,
@@ -206,13 +220,13 @@ async def _cleanup_auth_state_if_token_matches(
         result = await db.execute(
             delete(User).where(
                 User.id == user.id,
-                User.access_token == failed_access_token,
+                token_column == failed_token,
             )
         )
     else:
         result = await db.execute(
             update(User)
-            .where(User.id == user.id, User.access_token == failed_access_token)
+            .where(User.id == user.id, token_column == failed_token)
             .values(
                 access_token=None,
                 refresh_token=None,
@@ -277,6 +291,7 @@ async def _perform_token_refresh(user: User, db: AsyncSession) -> str:
             message='토큰 정보가 유효하지 않습니다. 아래 로그인 버튼 또는 "로그인"을 입력해 다시 로그인해주세요.'
         ) from exc
 
+    failed_refresh_token = user.refresh_token
     # 외부 요청 전에 트랜잭션을 끝내고, 조회 값은 expire_on_commit=False로 유지한다.
     await db.commit()
 
@@ -292,11 +307,14 @@ async def _perform_token_refresh(user: User, db: AsyncSession) -> str:
             "Token refresh requires re-login for keycloak_sub=%s",
             user.keycloak_id,
         )
-        user.access_token = None
-        user.refresh_token = None
-        user.access_token_expires_at = None
-        user.refresh_token_expires_at = None
-        await db.commit()
+        await _cleanup_auth_state_if_token_matches(
+            user,
+            db,
+            failed_refresh_token,
+            mode=UserAuthCleanupMode.CLEAR_SESSION,
+            reason="token_refresh_unauthorized",
+            token_column=User.refresh_token,
+        )
         raise LoginRequiredError(
             message='로그인 세션이 만료되었습니다. 아래 로그인 버튼 또는 "로그인"을 입력해 다시 로그인해주세요.'
         ) from exc
