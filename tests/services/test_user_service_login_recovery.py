@@ -103,7 +103,7 @@ async def test_perform_token_refresh_keeps_auth_state_on_non_terminal_failure(
     original_refresh_token = user.refresh_token
     db = DummyDB()
 
-    with pytest.raises(HTTPException, match="temporary_error"):
+    with pytest.raises(KakaoError):
         await user_service._perform_token_refresh(
             cast(User, user),
             cast(AsyncSession, cast(object, db)),

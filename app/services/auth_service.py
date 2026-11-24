@@ -262,6 +262,20 @@ def get_expiry_datetime(expires_in: int) -> datetime:
     return datetime.now(timezone.utc) + timedelta(seconds=expires_in)
 
 
+def _extract_oauth_error_code(response_body: bytes | str | None) -> str | None:
+    """Keycloak 오류 응답 본문에서 OAuth error 코드를 꺼냅니다. 파싱 불가면 None."""
+    if not response_body:
+        return None
+    try:
+        parsed = json.loads(response_body)
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    code = parsed.get("error")
+    return code if isinstance(code, str) else None
+
+
 async def request_token_refresh(
     refresh_token: str, *, keycloak_sub: str | None = None
 ) -> dict[str, Any]:
@@ -293,10 +307,24 @@ async def request_token_refresh(
         )
 
         if exc.response_code == Config.HttpStatus.BAD_REQUEST:
-            # invalid_grant 등 → 세션 만료 처리
+            error_code = _extract_oauth_error_code(exc.response_body)
+            if error_code == "invalid_grant":
+                # Keycloak은 세션 없음·토큰 만료·issuer 불일치를 모두 invalid_grant로 응답
+                raise HTTPException(
+                    status_code=Config.HttpStatus.UNAUTHORIZED,
+                    detail="인증 세션이 만료되었습니다. 다시 로그인해주세요.",
+                ) from exc
+            # invalid_client 등은 설정 오류일 수 있어 세션 만료로 단정하지 않는다.
+            logger.warning(
+                "Keycloak token refresh rejected without invalid_grant "
+                "(status_code=%s, error=%s) for keycloak_sub=%s",
+                exc.response_code,
+                error_code,
+                keycloak_sub,
+            )
             raise HTTPException(
-                status_code=Config.HttpStatus.UNAUTHORIZED,
-                detail="인증 세션이 만료되었습니다. 다시 로그인해주세요.",
+                status_code=Config.HttpStatus.SERVICE_UNAVAILABLE,
+                detail="토큰 갱신이 일시적으로 거부되었습니다.",
             ) from exc
 
         raise HTTPException(
