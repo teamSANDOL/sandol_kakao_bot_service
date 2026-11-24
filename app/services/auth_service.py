@@ -428,7 +428,13 @@ def _has_active_login_session(user: User) -> bool:
 
 
 async def _has_active_remote_login_session(user: User) -> bool:
-    """Keycloak에 refresh token을 확인해 기존 매핑이 실제로 활성 상태인지 판단합니다."""
+    """Keycloak에 refresh token을 확인해 기존 매핑이 실제로 활성 상태인지 판단합니다.
+
+    Returns:
+        bool: invalid_grant(401)일 때만 False(stale, 매핑 교체 허용)이다.
+            invalid_grant가 아닌 400(invalid_client 등)·5xx·네트워크 오류는
+            원인을 알 수 없으므로 True(계정 충돌 유지, fail-closed)로 본다.
+    """
     if not _has_active_login_session(user):
         return False
 

@@ -158,3 +158,41 @@ async def test_transient_failure_returns_retry_message_without_purge(
     db = await _refresh_raising(monkeypatch, status_code)
 
     assert db.executed == []
+
+
+def _remote_session_user() -> User:
+    return cast(User, _make_user())
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("status_code", "expected_active"),
+    [(401, False), (503, True), (500, True)],
+)
+async def test_remote_session_check_only_stale_on_unauthorized(
+    monkeypatch: pytest.MonkeyPatch, status_code: int, expected_active: bool
+) -> None:
+    async def fake(*_: object, **__: object) -> dict[str, object]:
+        raise HTTPException(status_code=status_code, detail="x")
+
+    monkeypatch.setattr(auth_service, "request_token_refresh", fake)
+
+    result = await auth_service._has_active_remote_login_session(_remote_session_user())
+
+    assert result is expected_active
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("body", "expected_active"),
+    [(b'{"error":"invalid_client"}', True), (b'{"error":"invalid_grant"}', False)],
+)
+async def test_remote_session_check_by_oauth_error_code(
+    monkeypatch: pytest.MonkeyPatch, body: bytes, expected_active: bool
+) -> None:
+    error = KeycloakPostError(error_message="x", response_code=400, response_body=body)
+    _install_failing_client(monkeypatch, error)
+
+    result = await auth_service._has_active_remote_login_session(_remote_session_user())
+
+    assert result is expected_active
