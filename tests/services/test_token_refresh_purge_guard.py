@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from typing import cast
 
 from fastapi import HTTPException
-from keycloak.exceptions import KeycloakPostError
+from keycloak.exceptions import KeycloakAuthenticationError, KeycloakPostError
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -196,3 +196,56 @@ async def test_remote_session_check_by_oauth_error_code(
     result = await auth_service._has_active_remote_login_session(_remote_session_user())
 
     assert result is expected_active
+
+
+class _FailureDB(_DummyDB):
+    async def commit(self) -> None:
+        return None
+
+    async def delete(self, _: object) -> None:
+        self.executed.append("delete")
+
+
+async def _auth_failure(
+    monkeypatch: pytest.MonkeyPatch, *, token: str | None, exists: bool | None
+) -> _FailureDB:
+    async def fake_exists(*_: object) -> bool | None:
+        return exists
+
+    monkeypatch.setattr(user_service, "keycloak_user_exists", fake_exists)
+    db = _FailureDB()
+    with pytest.raises(LoginRequiredError):
+        await user_service.handle_keycloak_authentication_failure(
+            cast(User, _make_user()),
+            cast(AsyncSession, cast(object, db)),
+            KeycloakAuthenticationError(error_message="x", response_code=401),
+            failed_access_token=token,
+        )
+    return db
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("has_token", [False, True])
+@pytest.mark.parametrize("exists", [False, None])
+async def test_auth_failure_purge_disabled_deletes_nothing(
+    monkeypatch: pytest.MonkeyPatch, has_token: bool, exists: bool | None
+) -> None:
+    monkeypatch.setattr(Config, "KC_TOKEN_PURGE_ENABLED", False)
+
+    db = await _auth_failure(
+        monkeypatch, token="access-token" if has_token else None, exists=exists
+    )
+
+    assert db.executed == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("exists", [False, None])
+async def test_auth_failure_purge_enabled_still_cleans_up(
+    monkeypatch: pytest.MonkeyPatch, exists: bool | None
+) -> None:
+    monkeypatch.setattr(Config, "KC_TOKEN_PURGE_ENABLED", True)
+
+    db = await _auth_failure(monkeypatch, token="access-token", exists=exists)
+
+    assert len(db.executed) == 1
