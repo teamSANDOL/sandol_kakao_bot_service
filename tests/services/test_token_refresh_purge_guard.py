@@ -207,7 +207,7 @@ class _FailureDB(_DummyDB):
 
 
 async def _auth_failure(
-    monkeypatch: pytest.MonkeyPatch, *, token: str | None, exists: bool | None
+    monkeypatch: pytest.MonkeyPatch, *, failed: str | None, exists: bool | None
 ) -> _FailureDB:
     async def fake_exists(*_: object) -> bool | None:
         return exists
@@ -219,7 +219,7 @@ async def _auth_failure(
             cast(User, _make_user()),
             cast(AsyncSession, cast(object, db)),
             KeycloakAuthenticationError(error_message="x", response_code=401),
-            failed_access_token=token,
+            failed_access_token=failed,
         )
     return db
 
@@ -233,7 +233,7 @@ async def test_auth_failure_purge_disabled_deletes_nothing(
     monkeypatch.setattr(Config, "KC_TOKEN_PURGE_ENABLED", False)
 
     db = await _auth_failure(
-        monkeypatch, token="access-token" if has_token else None, exists=exists
+        monkeypatch, failed="access-token" if has_token else None, exists=exists
     )
 
     assert db.executed == []
@@ -246,6 +246,6 @@ async def test_auth_failure_purge_enabled_still_cleans_up(
 ) -> None:
     monkeypatch.setattr(Config, "KC_TOKEN_PURGE_ENABLED", True)
 
-    db = await _auth_failure(monkeypatch, token="access-token", exists=exists)
+    db = await _auth_failure(monkeypatch, failed="access-token", exists=exists)
 
     assert len(db.executed) == 1
