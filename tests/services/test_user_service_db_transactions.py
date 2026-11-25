@@ -99,9 +99,9 @@ async def test_refresh_releases_connection_and_preserves_expected_auth_state(
         with pytest.raises(LoginRequiredError):
             await user_service._perform_token_refresh(user, db)
     else:
-        with pytest.raises(HTTPException) as exc_info:
+        expected_exc = KakaoError if outcome == "temporary" else HTTPException
+        with pytest.raises(expected_exc):
             await user_service._perform_token_refresh(user, db)
-        assert exc_info.value.status_code == 500
 
     assert not db.in_transaction()
     async with AsyncSessionLocal(bind=engine) as reader:

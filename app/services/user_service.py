@@ -133,6 +133,20 @@ async def handle_keycloak_authentication_failure(
 ) -> NoReturn:
     """Keycloak 인증 실패를 사용자 상태에 맞게 정리하고 재로그인을 유도합니다."""
     await db.commit()
+
+    if not Config.KC_TOKEN_PURGE_ENABLED:
+        # 삭제 스위치가 꺼져 있으면 토큰·세션·사용자 레코드를 건드리지 않는다.
+        logger.warning(
+            "Keycloak authentication failed; purge disabled, keeping state sub=%s",
+            user.keycloak_id,
+        )
+        raise LoginRequiredError(
+            message=(
+                "인증 확인에 실패했습니다. "
+                '아래 로그인 버튼 또는 "로그인"을 입력해 다시 로그인해주세요.'
+            )
+        ) from error
+
     user_exists = await keycloak_user_exists(user.keycloak_id)
 
     if user_exists is False:
@@ -308,19 +322,28 @@ async def _perform_token_refresh(user: User, db: AsyncSession) -> str:
         )
     except HTTPException as exc:
         if exc.status_code != Config.HttpStatus.UNAUTHORIZED:
-            raise
+            logger.warning(
+                "Token refresh failed transiently (status=%s) for keycloak_sub=%s",
+                exc.status_code,
+                user.keycloak_id,
+            )
+            raise KakaoError(
+                "인증 서버 연결이 원활하지 않습니다. 잠시 후 다시 시도해주세요."
+            ) from exc
 
         logger.warning(
-            "Token refresh requires re-login for keycloak_sub=%s",
+            "Token refresh requires re-login for keycloak_sub=%s (purge_enabled=%s)",
             user.keycloak_id,
+            Config.KC_TOKEN_PURGE_ENABLED,
         )
-        await _cleanup_auth_state_if_token_matches(
-            user,
-            db,
-            User.refresh_token == failed_refresh_token,
-            mode=UserAuthCleanupMode.CLEAR_SESSION,
-            reason="token_refresh_unauthorized",
-        )
+        if Config.KC_TOKEN_PURGE_ENABLED:
+            await _cleanup_auth_state_if_token_matches(
+                user,
+                db,
+                User.refresh_token == failed_refresh_token,
+                mode=UserAuthCleanupMode.CLEAR_SESSION,
+                reason="token_refresh_unauthorized",
+            )
         raise LoginRequiredError(
             message='로그인 세션이 만료되었습니다. 아래 로그인 버튼 또는 "로그인"을 입력해 다시 로그인해주세요.'
         ) from exc

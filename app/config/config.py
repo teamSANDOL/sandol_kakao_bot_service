@@ -101,6 +101,10 @@ class Config:
     # DB 조회·JWT 디코딩 등 나머지 처리 시간을 남겨두기 위해 예산보다 짧게 잡는다.
     # python-keycloak의 timeout 파라미터가 int만 받으므로 초 단위 정수로 둔다.
     KC_HTTP_TIMEOUT_SECONDS = int(os.getenv("KC_HTTP_TIMEOUT_SECONDS", "3"))
+    # false면 invalid_grant여도 저장된 토큰을 지우지 않는다(재로그인 안내만 한다).
+    KC_TOKEN_PURGE_ENABLED = (
+        os.getenv("KC_TOKEN_PURGE_ENABLED", "true").lower() == "true"
+    )
 
     ADMIN_PANEL_ENABLED = os.getenv("ADMIN_PANEL_ENABLED", "true").lower() == "true"
     ADMIN_SESSION_TTL_SECONDS = int(os.getenv("ADMIN_SESSION_TTL_SECONDS", "3600"))
@@ -154,6 +158,7 @@ class Config:
         CONFLICT = 409
         INTERNAL_SERVER_ERROR = 500
         BAD_GATEWAY = 502
+        SERVICE_UNAVAILABLE = 503
 
 
 Config._validate()
