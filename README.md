@@ -85,6 +85,7 @@
   ### Security
   TOKEN_ENCRYPTION_KEY=*****
   RELAY_CLIENT_SECRETS=dev-hmac-secret-please-change
+  RELAY_ISSUE_LINK_SECRET=dev-issue-link-secret-please-change
   NONCE_TTL_SECONDS=300
   ```
 
@@ -99,7 +100,7 @@
 | `LOGIN_REDIRECT_AFTER` | No | empty / `None` | `/auth/realms/Sandori/account/` | No | safe relative path만 허용되며 절대 URL은 사용할 수 없음 | 로그인 완료 후 추가 리다이렉트 상대 경로입니다. |
 | `DATABASE_URL` | Yes | `sqlite+aiosqlite:///./kakao_bot_service.db` | `sqlite+aiosqlite:///./kakao_bot_service.db` | No | Alembic(`alembic/env.py`)에서 필수 | 앱 DB 엔진과 마이그레이션 연결 문자열입니다. |
 | `CACHE_DIR` | No | `./.cache` | `./.cache` | No | nonce/cache 저장 경로 | Auth Relay nonce 검증 캐시 저장 위치입니다. |
-| `AUTH_RELAY_URL` | Yes (login flow) | `http://auth-relay:8000/relay` | `http://auth-relay:8000/relay` | No | `/issue_login_link` 호출에 사용 | 로그인 링크 발급용 auth-relay base URL입니다. |
+| `AUTH_RELAY_URL` | Yes (login flow) | `http://auth-relay:8000/relay` | `http://auth-relay:8000/relay` | No | `/issue_login_link` 호출에 사용 | 로그인 링크 발급용 auth-relay base URL입니다. 사설망 직접 주소 또는 공개 HTTPS(`https://<인증 도메인>/relay`) 모두 가능하며 요청은 항상 서명합니다. |
 | `MEAL_SERVICE_URL` | Yes (meal feature) | `http://meal-service:80/meal` | `http://meal-service:80/meal` | No | meal/restaurant API 호출 | 식단/식당 조회 기능의 upstream base URL입니다. |
 | `STATIC_INFO_SERVICE_URL` | Yes (statics feature) | `http://static-info-service:80/static-info` | `http://static-info-service:80/static-info` | No | 조직도/셔틀 이미지 조회 | 정적 정보 기능 upstream base URL입니다. |
 | `NOTICE_SERVICE_URL` | Yes (notice feature) | `http://notice-notification:8081/notice-notification` | `http://notice-notification:3000/notice-notification` | No | `.env.example` 예시 포트(3000)와 코드 fallback(8081) 불일치, 운영에서는 실제 포트로 명시 | 공지 조회 기능 upstream base URL입니다. |
@@ -110,6 +111,7 @@
 | `KC_CLIENT_SECRET` | Yes when `DEBUG=False` | none | `*****` | Yes | `Config._validate()`에서 운영 시 필수 | Keycloak confidential client 시크릿입니다. |
 | `TOKEN_ENCRYPTION_KEY` | Yes | none | `*****` | Yes | `Config._validate()`에서 항상 필수 | 사용자 토큰 암복호화(Fernet) 키입니다. |
 | `RELAY_CLIENT_SECRETS` | Yes when `DEBUG=False` | empty string | `dev-hmac-secret-please-change` | Yes | relay 서명 검증 키, 운영에서는 강한 값 필수 | Auth Relay callback 서명 검증용 secret입니다. |
+| `RELAY_ISSUE_LINK_SECRET` | Yes when `DEBUG=False` | empty string | `dev-issue-link-secret-please-change` | Yes | 비어도 기동은 하되 ERROR 로그 1회, 요청은 서명 없이 전송(relay enforce면 401) | `/issue_login_link` 요청 서명 비밀. auth-relay의 `SANDOL_KAKAO_BOT__ISSUE_LINK_SECRET`과 같은 값이며 `RELAY_CLIENT_SECRETS`와 다른 값을 씁니다. 규약은 auth-relay README의 "issue_login_link 요청 서명 규약". |
 | `NONCE_TTL_SECONDS` | No | `300` | `300` | No | timestamp/nonce 검증 허용 시간창 | replay 공격 방지를 위한 nonce/timestamp TTL(초)입니다. |
 
 #### Required 판정 기준

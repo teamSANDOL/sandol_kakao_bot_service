@@ -34,3 +34,16 @@ def test_config_rejects_invalid_downstream_timeout(
     monkeypatch.setattr(Config, setting, timeout)
     with pytest.raises(ValueError, match=setting):
         Config._validate()
+
+
+def test_config_starts_without_issue_link_secret_and_logs_error_once(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(Config, "debug", False)
+    monkeypatch.setattr(Config, "KC_CLIENT_SECRET", "kc-secret")
+    monkeypatch.setattr(Config, "RELAY_CLIENT_SECRETS", "relay-secret")
+    monkeypatch.setattr(Config, "RELAY_ISSUE_LINK_SECRET", "")
+    Config._validate()  # 기동을 막지 않는다
+    errors = [r for r in caplog.records if "RELAY_ISSUE_LINK_SECRET" in r.getMessage()]
+    assert len(errors) == 1
+    assert errors[0].levelname == "ERROR"
