@@ -115,6 +115,8 @@ class Config:
     TOKEN_ENCRYPTION_KEY = os.getenv("TOKEN_ENCRYPTION_KEY")
 
     RELAY_CLIENT_SECRETS = os.getenv("RELAY_CLIENT_SECRETS", "")
+    # auth-relay issue_login_link 요청 서명 비밀(relay의 <CLIENT>__ISSUE_LINK_SECRET과 같은 값)
+    RELAY_ISSUE_LINK_SECRET = os.getenv("RELAY_ISSUE_LINK_SECRET", "")
     NONCE_TTL_SECONDS = int(os.getenv("NONCE_TTL_SECONDS", "300"))
 
     @classmethod
@@ -142,6 +144,11 @@ class Config:
         if not cls.debug and not cls.RELAY_CLIENT_SECRETS:
             raise RuntimeError(
                 "RELAY_CLIENT_SECRETS environment variable must be set and non-empty "
+                "when DEBUG is false."
+            )
+        if not cls.debug and not cls.RELAY_ISSUE_LINK_SECRET:
+            raise RuntimeError(
+                "RELAY_ISSUE_LINK_SECRET environment variable must be set and non-empty "
                 "when DEBUG is false."
             )
 

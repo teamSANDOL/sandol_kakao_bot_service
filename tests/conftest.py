@@ -12,6 +12,7 @@ os.environ.setdefault(
     "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
 )
 os.environ.setdefault("RELAY_CLIENT_SECRETS", "test-relay-secret")
+os.environ.setdefault("RELAY_ISSUE_LINK_SECRET", "test-issue-link-secret")
 os.environ.setdefault("KC_SERVER_URL", "https://sandol.sio2.kr/auth/")
 os.environ.setdefault("KC_CLIENT_ID", "sandol-kakao-bot")
 os.environ.setdefault("KC_REALM", "Sandori")

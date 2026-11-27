@@ -5,6 +5,7 @@ import base64
 import hashlib
 import hmac
 import json
+import secrets
 import time
 from datetime import datetime, timezone, timedelta
 
@@ -12,7 +13,7 @@ import jwt
 from jwt import InvalidTokenError
 from diskcache import FanoutCache  # type: ignore[import-untyped]
 from fastapi import HTTPException
-from httpx import AsyncClient, HTTPStatusError
+from httpx import AsyncClient, HTTPStatusError, RequestError
 from keycloak import KeycloakAdmin, KeycloakOpenID
 from keycloak.exceptions import KeycloakAuthenticationError, KeycloakError, KeycloakGetError
 from pydantic import HttpUrl, TypeAdapter
@@ -146,6 +147,44 @@ def mark_nonce_once(nonce: str) -> None:
 
     if not was_added:
         raise HTTPException(status_code=400, detail="reused_nonce")
+
+
+RELAY_REQUEST_SIGNATURE_VERSION = "SANDOL-RELAY-HMAC-V1"
+ISSUE_LINK_PATH = "/issue_login_link"
+
+
+def build_relay_request_headers(
+    secret: str, client_key: str, path: str, body: bytes
+) -> dict[str, str]:
+    """auth-relay 서버 간 API 요청 서명 헤더를 만듭니다.
+
+    canonical 문자열(auth-relay README의 요청 서명 규약과 동일):
+    버전, 메서드(POST), relay 기준 경로, timestamp, nonce, client_key,
+    본문 SHA-256 hex를 줄바꿈으로 이어 HMAC-SHA256(base64url, 패딩 제거)으로 서명한다.
+    """
+    ts = str(int(time.time()))
+    nonce = secrets.token_urlsafe(24)
+    canonical = "\n".join(
+        [
+            RELAY_REQUEST_SIGNATURE_VERSION,
+            "POST",
+            path,
+            ts,
+            nonce,
+            client_key,
+            hashlib.sha256(body).hexdigest(),
+        ]
+    )
+    mac = hmac.new(secret.encode("utf-8"), canonical.encode("utf-8"), hashlib.sha256)
+    return {
+        "Content-Type": "application/json",
+        "X-Relay-Client-Key": client_key,
+        "X-Relay-Timestamp": ts,
+        "X-Relay-Nonce": nonce,
+        "X-Relay-Request-Signature": base64.urlsafe_b64encode(mac.digest())
+        .decode()
+        .rstrip("="),
+    }
 
 
 def expected_keycloak_issuer() -> str:
@@ -363,10 +402,26 @@ async def generate_login_link(payload: Payload, client: AsyncClient) -> IssueLin
     )
     payload_dict = request_payload.model_dump(mode="json")
     logger.debug(payload_dict)
+    # 서명한 바이트를 그대로 보낸다(재직렬화하면 본문 해시가 달라진다).
+    body = json.dumps(payload_dict, separators=(",", ":")).encode("utf-8")
+    if Config.RELAY_ISSUE_LINK_SECRET:
+        headers = build_relay_request_headers(
+            Config.RELAY_ISSUE_LINK_SECRET,
+            request_payload.client_key,
+            ISSUE_LINK_PATH,
+            body,
+        )
+    else:
+        # DEBUG에서만 도달한다(운영은 Config._validate가 기동을 막는다).
+        logger.warning(
+            "RELAY_ISSUE_LINK_SECRET is empty: issue_login_link sent unsigned"
+        )
+        headers = {"Content-Type": "application/json"}
     try:
         response = await client.post(
-            f"{Config.AUTH_RELAY_URL}/issue_login_link",
-            json=payload_dict,
+            f"{Config.AUTH_RELAY_URL}{ISSUE_LINK_PATH}",
+            content=body,
+            headers=headers,
         )
         response.raise_for_status()
     except HTTPStatusError as exc:
@@ -375,6 +430,12 @@ async def generate_login_link(payload: Payload, client: AsyncClient) -> IssueLin
             exc.response.status_code,
             exc.response.text,
         )
+        raise KakaoError(
+            "로그인 링크를 생성하지 못했습니다. 잠시 후 다시 시도해주세요."
+        ) from exc
+    except RequestError as exc:
+        # 공개 HTTPS 경로에서는 DNS·TLS·타임아웃 실패가 생길 수 있다.
+        logger.error("Auth relay login link request error: %s", type(exc).__name__)
         raise KakaoError(
             "로그인 링크를 생성하지 못했습니다. 잠시 후 다시 시도해주세요."
         ) from exc
