@@ -412,10 +412,8 @@ async def generate_login_link(payload: Payload, client: AsyncClient) -> IssueLin
             body,
         )
     else:
-        # DEBUG에서만 도달한다(운영은 Config._validate가 기동을 막는다).
-        logger.warning(
-            "RELAY_ISSUE_LINK_SECRET is empty: issue_login_link sent unsigned"
-        )
+        # 비밀 미설정: 기동 시 ERROR를 1회 남겼으므로 요청마다는 DEBUG로만 남긴다.
+        logger.debug("issue_login_link sent unsigned (no RELAY_ISSUE_LINK_SECRET)")
         headers = {"Content-Type": "application/json"}
     try:
         response = await client.post(

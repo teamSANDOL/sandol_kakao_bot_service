@@ -111,7 +111,7 @@
 | `KC_CLIENT_SECRET` | Yes when `DEBUG=False` | none | `*****` | Yes | `Config._validate()`에서 운영 시 필수 | Keycloak confidential client 시크릿입니다. |
 | `TOKEN_ENCRYPTION_KEY` | Yes | none | `*****` | Yes | `Config._validate()`에서 항상 필수 | 사용자 토큰 암복호화(Fernet) 키입니다. |
 | `RELAY_CLIENT_SECRETS` | Yes when `DEBUG=False` | empty string | `dev-hmac-secret-please-change` | Yes | relay 서명 검증 키, 운영에서는 강한 값 필수 | Auth Relay callback 서명 검증용 secret입니다. |
-| `RELAY_ISSUE_LINK_SECRET` | Yes when `DEBUG=False` | empty string | `dev-issue-link-secret-please-change` | Yes | 비면 운영 기동 실패 | `/issue_login_link` 요청 서명 비밀. auth-relay의 `SANDOL_KAKAO_BOT__ISSUE_LINK_SECRET`과 같은 값이며 `RELAY_CLIENT_SECRETS`와 다른 값을 씁니다. 규약은 auth-relay README의 "issue_login_link 요청 서명 규약". |
+| `RELAY_ISSUE_LINK_SECRET` | Yes when `DEBUG=False` | empty string | `dev-issue-link-secret-please-change` | Yes | 비어도 기동은 하되 ERROR 로그 1회, 요청은 서명 없이 전송(relay enforce면 401) | `/issue_login_link` 요청 서명 비밀. auth-relay의 `SANDOL_KAKAO_BOT__ISSUE_LINK_SECRET`과 같은 값이며 `RELAY_CLIENT_SECRETS`와 다른 값을 씁니다. 규약은 auth-relay README의 "issue_login_link 요청 서명 규약". |
 | `NONCE_TTL_SECONDS` | No | `300` | `300` | No | timestamp/nonce 검증 허용 시간창 | replay 공격 방지를 위한 nonce/timestamp TTL(초)입니다. |
 
 #### Required 판정 기준

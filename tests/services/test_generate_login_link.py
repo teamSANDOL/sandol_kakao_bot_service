@@ -222,3 +222,24 @@ async def test_generate_login_link_returns_kakao_error_on_network_error(
             cast(Payload, cast(object, SimpleNamespace(user_id="kakao-user-1"))),
             cast(AsyncClient, cast(object, _NetworkErrorAsyncClient())),
         )
+
+
+@pytest.mark.asyncio
+async def test_generate_login_link_sends_unsigned_when_secret_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        Config, "LOGIN_CALLBACK_URL", "https://example.com/kakao-bot/users/callback"
+    )
+    monkeypatch.setattr(Config, "LOGIN_REDIRECT_AFTER", None)
+    monkeypatch.setattr(Config, "AUTH_RELAY_URL", "http://auth-relay:8000/relay")
+    monkeypatch.setattr(Config, "RELAY_ISSUE_LINK_SECRET", "")
+
+    client = _RecordingAsyncClient()
+    await generate_login_link(
+        cast(Payload, cast(object, SimpleNamespace(user_id="kakao-user-1"))),
+        cast(AsyncClient, cast(object, client)),
+    )
+
+    _, headers = client.raw[0]
+    assert headers == {"Content-Type": "application/json"}

@@ -147,9 +147,11 @@ class Config:
                 "when DEBUG is false."
             )
         if not cls.debug and not cls.RELAY_ISSUE_LINK_SECRET:
-            raise RuntimeError(
-                "RELAY_ISSUE_LINK_SECRET environment variable must be set and non-empty "
-                "when DEBUG is false."
+            # 비밀 주입 전 재배포도 기동은 막지 않는다. 요청은 서명 없이 나가므로
+            # relay가 warn이면 통과, enforce면 401이 되어 이 로그로 원인을 찾는다.
+            logger.error(
+                "RELAY_ISSUE_LINK_SECRET is not set: issue_login_link requests "
+                "will be sent unsigned."
             )
 
     class HttpStatus:
